@@ -811,13 +811,32 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
           {/* idle */}
           {voiceStep === "idle" && (
-            <div className="pop flex flex-col items-center gap-6">
-              <div className="text-7xl">🎤</div>
-              <p className="text-xl text-slate-200">マイクに向かってお名前・会社名・<br />担当者名をお話しください</p>
-              <p className="text-sm text-slate-400">例：「田中物産の山田と申します。青山さんとのお約束です」</p>
+            <div className="pop flex flex-col items-center gap-5 w-full max-w-lg">
+              <div className="text-6xl">🎤</div>
+              <p className="text-xl text-slate-200 text-center">マイクに向かって話しかけてください</p>
+
+              {/* サンプル */}
+              <div className="w-full space-y-2">
+                <p className="text-xs text-slate-500 tracking-widest text-center mb-1">― 話し方の例 ―</p>
+                {[
+                  { label: "お名前＋会社＋担当",  text: "「田中物産の山田と申します。\n　青山さんとのお約束です」" },
+                  { label: "お名前＋担当者のみ",  text: "「山田と申します。\n　15時に鈴木さんにお会いしたいのですが」" },
+                  { label: "会社名のみ知っている", text: "「ABCコンサルティングから参りました。\n　担当は伺っていないのですが…」" },
+                ].map((s, i) => (
+                  <div key={i} className="flex items-start gap-3 px-4 py-3 rounded-xl bg-white/6 border border-white/10">
+                    <span className="text-xs text-sky-400/70 mt-0.5 shrink-0 w-24">{s.label}</span>
+                    <span className="text-slate-300 text-sm whitespace-pre-line leading-relaxed">{s.text}</span>
+                  </div>
+                ))}
+              </div>
+
               <button onClick={startVoice}
-                className="mt-4 px-12 py-5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 text-xl font-bold">
+                className="mt-2 px-12 py-5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 text-xl font-bold w-full">
                 🎤 話しかける
+              </button>
+              <button onClick={() => { setVoiceStep("idle"); setScreen("keyboard"); }}
+                className="text-sm text-slate-500 hover:text-slate-300 transition">
+                ⌨️ キーボードで入力する
               </button>
             </div>
           )}
@@ -879,28 +898,43 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
                     className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button onClick={() => { setVoiceStep("idle"); }}
-                  className="px-5 py-4 rounded-xl bg-white/10 border border-white/20">
-                  もう一度
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => setVoiceStep("idle")}
+                  className="flex-1 py-3 rounded-xl bg-white/10 border border-white/20 text-sm text-slate-300 flex items-center justify-center gap-1">
+                  🎤 もう一度音声で
                 </button>
-                <button onClick={handleVoiceConfirm} disabled={!voiceResult.visitorName}
-                  className="flex-1 py-4 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-xl font-bold disabled:opacity-40">
-                  受付する
+                <button onClick={() => {
+                    setNameInput(voiceResult.visitorName || "");
+                    setCompanyInput(voiceResult.company || "");
+                    setVoiceStep("idle");
+                    setScreen("keyboard");
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-white/10 border border-white/20 text-sm text-slate-300 flex items-center justify-center gap-1">
+                  ⌨️ キーボードで修正
                 </button>
               </div>
+              <button onClick={handleVoiceConfirm} disabled={!voiceResult.visitorName}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-xl font-bold disabled:opacity-40 mt-1">
+                受付する
+              </button>
             </div>
           )}
 
           {/* error */}
           {voiceStep === "error" && (
-            <div className="flex flex-col items-center gap-5 pop">
+            <div className="flex flex-col items-center gap-5 pop w-full max-w-sm">
               <div className="text-6xl">⚠️</div>
-              <p className="text-slate-300 text-base max-w-sm">{voiceError}</p>
-              <button onClick={() => setVoiceStep("idle")}
-                className="px-8 py-3 rounded-full bg-white/10 border border-white/20">
-                もう一度試す
-              </button>
+              <p className="text-slate-300 text-base text-center">{voiceError}</p>
+              <div className="flex flex-col gap-3 w-full">
+                <button onClick={() => setVoiceStep("idle")}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 text-white font-bold text-lg flex items-center justify-center gap-2">
+                  🎤 もう一度音声で試す
+                </button>
+                <button onClick={() => { setVoiceStep("idle"); setScreen("keyboard"); }}
+                  className="w-full py-4 rounded-xl bg-white/10 border border-white/20 text-slate-300 font-medium flex items-center justify-center gap-2">
+                  ⌨️ キーボードで入力する
+                </button>
+              </div>
             </div>
           )}
         </div>
