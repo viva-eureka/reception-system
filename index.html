@@ -489,49 +489,61 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
       setVoiceError("管理画面の設定にAnthropicのAPIキーを入力してください。");
       setVoiceStep("error"); return;
     }
-    speak("マイクに向かってお話しください。お名前と会社名、ご担当者をおっしゃっていただくと受付が完了します。");
+    // TTS は認識開始時に使わない（マイクと競合するため）
     setVoiceStep("listening");
     setVoiceTranscript("");
     setVoiceError("");
     const recog = new SpeechRecognition();
-    recog.lang = "ja-JP"; recog.continuous = false; recog.interimResults = true;
+    recog.lang = "ja-JP";
+    recog.continuous = true;   // 自動停止させず「完了」ボタンで止める
+    recog.interimResults = true;
+    recog.maxAlternatives = 1;
+    voiceRecogRef.current = recog;
     recog.onresult = (e) => {
       const t = Array.from(e.results).map(r => r[0].transcript).join("");
       setVoiceTranscript(t);
     };
-    recog.onend = async () => {
-      if (!voiceTranscriptRef.current) {
-        setVoiceError("音声を認識できませんでした。もう一度お試しください。");
-        setVoiceStep("error"); return;
-      }
-      setVoiceStep("processing");
-      try {
-        const prompt = `受付での来訪者の発言から、氏名・会社名・社内担当者名を抽出してください。
-不明な場合は空文字にしてください。JSON形式のみ返してください。
-
-発言:「${voiceTranscriptRef.current}」
-
-{"visitorName":"","company":"","host":""}`;
-        const raw = await callClaude(getApiKey(), prompt);
-        const json = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
-        setVoiceResult(json);
-        setVoiceStep("confirm");
-        const name = json.visitorName || "お客様";
-        speak(name + "様、いらっしゃいませ。内容をご確認ください。");
-      } catch(e) {
-        setVoiceError("解析に失敗しました: " + e.message);
-        setVoiceStep("error");
-      }
-    };
     recog.onerror = (e) => {
-      setVoiceError("音声認識エラー: " + e.error);
+      if (e.error === "no-speech") {
+        setVoiceError("音声が聞き取れませんでした。マイクに近づいてもう一度お話しください。");
+      } else if (e.error === "not-allowed") {
+        setVoiceError("マイクの使用が許可されていません。ブラウザの設定でマイクを許可してください。");
+      } else {
+        setVoiceError("音声認識エラー: " + e.error);
+      }
       setVoiceStep("error");
     };
     recog.start();
   };
-  // onresult内でstateを参照するためrefを使う
   const voiceTranscriptRef = useRef("");
+  const voiceRecogRef = useRef(null);
   useEffect(() => { voiceTranscriptRef.current = voiceTranscript; }, [voiceTranscript]);
+
+  const stopVoiceAndProcess = async () => {
+    if (voiceRecogRef.current) { voiceRecogRef.current.stop(); voiceRecogRef.current = null; }
+    const transcript = voiceTranscriptRef.current;
+    if (!transcript.trim()) {
+      setVoiceError("音声が認識できませんでした。もう一度お試しください。");
+      setVoiceStep("error"); return;
+    }
+    setVoiceStep("processing");
+    try {
+      const prompt = `受付での来訪者の発言から、氏名・会社名・社内担当者名を抽出してください。
+不明な場合は空文字にしてください。JSON形式のみ返してください。
+
+発言:「${transcript}」
+
+{"visitorName":"","company":"","host":""}`;
+      const raw = await callClaude(getApiKey(), prompt);
+      const json = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+      setVoiceResult(json);
+      setVoiceStep("confirm");
+      speak((json.visitorName || "お客様") + "様、いらっしゃいませ。内容をご確認ください。");
+    } catch(e) {
+      setVoiceError("解析に失敗しました: " + e.message);
+      setVoiceStep("error");
+    }
+  };
 
   const handleVoiceConfirm = () => {
     if (!voiceResult.visitorName) return;
@@ -790,7 +802,11 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     const th = THEMES[db.settings.bgTheme || "obsidian"];
     return (
       <KioskShell bg={th.bg}>
-        <Header title="音声で受付" onBack={() => { window.speechSynthesis && window.speechSynthesis.cancel(); setScreen("standby"); }} />
+        <Header title="音声で受付" onBack={() => {
+          if (voiceRecogRef.current) { voiceRecogRef.current.stop(); voiceRecogRef.current = null; }
+          window.speechSynthesis && window.speechSynthesis.cancel();
+          setVoiceStep("idle"); setScreen("standby");
+        }} />
         <div className="flex-1 flex flex-col items-center justify-center px-10 text-white text-center">
 
           {/* idle */}
@@ -808,19 +824,21 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
           {/* listening */}
           {voiceStep === "listening" && (
-            <div className="flex flex-col items-center gap-6 pop">
+            <div className="flex flex-col items-center gap-5 pop">
               <div className="relative w-28 h-28">
                 <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
                 <div className="absolute inset-3 rounded-full bg-red-500/30 animate-ping" style={{animationDelay:"0.2s"}} />
                 <div className="relative z-10 w-full h-full rounded-full bg-red-500 flex items-center justify-center text-5xl">🎤</div>
               </div>
               <p className="text-2xl font-light">聞いています...</p>
-              {voiceTranscript && (
-                <div className="mt-2 px-6 py-3 rounded-xl bg-white/10 text-slate-200 text-lg max-w-md">
-                  「{voiceTranscript}」
-                </div>
-              )}
-              <p className="text-sm text-slate-400">話し終えると自動で解析します</p>
+              <div className="min-h-16 px-6 py-3 rounded-xl bg-white/10 text-slate-200 text-lg max-w-md w-full text-center">
+                {voiceTranscript ? `「${voiceTranscript}」` : <span className="text-slate-500 text-sm">お名前・会社名・担当者名をお話しください</span>}
+              </div>
+              <button onClick={stopVoiceAndProcess} disabled={!voiceTranscript}
+                className="mt-2 px-12 py-4 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-xl font-bold disabled:opacity-30 disabled:cursor-not-allowed transition">
+                ✓ 完了
+              </button>
+              <p className="text-xs text-slate-500">話し終わったら「完了」を押してください</p>
             </div>
           )}
 
