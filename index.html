@@ -232,6 +232,7 @@ const defaultDB = () => ({
     closeTime: "18:00",
     greetingMode: "name", // full=会社名+氏名 / name=氏名のみ / generic=汎用文のみ
     bgTheme: "obsidian", // obsidian|ink|marble|midnight|crimson
+    afterHoursReception: false, // 時間外でも受付操作を許可するか
     chatWebhook: "https://chat.googleapis.com/v1/spaces/AAAA.../messages?key=...（デモ）",
     rooms: ["会議室A", "会議室B", "応接室"],
   },
@@ -417,15 +418,21 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
   /* ---- 営業時間外 ---- */
   if (!isOpen() && screen === "standby") {
+    const allowAfter = db.settings.afterHoursReception;
     return (
-      <KioskShell>
+      <KioskShell bg={THEMES[db.settings.bgTheme || "obsidian"].bg} onClick={allowAfter ? () => setScreen("menu") : undefined}>
         <div className="flex-1 flex flex-col items-center justify-center text-center text-white px-10">
           <div className="text-5xl mb-6">🌙</div>
           <div className="text-3xl font-bold mb-3">ただいま営業時間外です</div>
           <div className="text-slate-300 text-lg">
             受付時間 {db.settings.openTime} 〜 {db.settings.closeTime}
           </div>
-          <div className="mt-10 text-slate-400 text-sm">{db.settings.companyName}</div>
+          {allowAfter && (
+            <div className="mt-8 px-6 py-3 rounded-full bg-white/10 border border-white/20 text-sm cursor-pointer">
+              画面をタップして受付を開始
+            </div>
+          )}
+          <div className="mt-6 text-slate-400 text-sm">{db.settings.companyName}</div>
         </div>
       </KioskShell>
     );
@@ -437,14 +444,6 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return (
       <KioskShell bg={th.bg}>
         <StandbyDecor theme={th} />
-        {/* テーマ切替（右下固定・小さく目立たない） */}
-        <div className="absolute bottom-3 right-4 z-20 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-          {THEME_ORDER.map(k => (
-            <button key={k} className={"theme-chip " + ((db.settings.bgTheme||"obsidian")===k?"active":"")}
-              style={{ background: THEMES[k].swatch }}
-              onClick={() => { setDB({ ...db, settings: { ...db.settings, bgTheme: k } }); }} />
-          ))}
-        </div>
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-10 cursor-pointer select-none" onClick={() => setScreen("menu")}>
           {/* あいさつ */}
           <div className={"fadeup flex items-center gap-3 mb-0.5"}>
@@ -495,7 +494,7 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
         <div className="flex-1 grid grid-cols-2 gap-5 p-8">
           <BigButton emoji="📦" label="配送業者の方" sub="ボタンひとつで担当者を呼び出します"
             color="from-amber-400 to-orange-500" onClick={handleDelivery} />
-          <BigButton emoji="🙋" label="ご予約・招待の方" sub="QRコード または お名前で受付"
+          <BigButton emoji="🤝" label="ご予約・招待の方" sub="QRコード または お名前で受付"
             color="from-sky-400 to-indigo-500" onClick={() => setScreen("visitor")} />
         </div>
       </KioskShell>
@@ -987,7 +986,17 @@ function Settings({ db, setDB }) {
           <Field label="開始" type="time" value={s.openTime} onChange={(v) => set({ openTime: v })} />
           <Field label="終了" type="time" value={s.closeTime} onChange={(v) => set({ closeTime: v })} />
         </div>
-        <p className="text-xs text-slate-400">時間外は待ち受けに「ただいま営業時間外です」を表示します。</p>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div className={"relative inline-block w-10 h-6 rounded-full transition " + (s.afterHoursReception ? "bg-sky-500" : "bg-slate-300")}
+               onClick={() => set({ afterHoursReception: !s.afterHoursReception })}>
+            <div className={"absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all " + (s.afterHoursReception ? "left-5" : "left-1")} />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-slate-800">時間外でも受付を許可する</div>
+            <div className="text-xs text-slate-500">ONにすると時間外画面からもタップで受付を開始できます</div>
+          </div>
+        </label>
+        <p className="text-xs text-slate-400">時間外は「ただいま営業時間外です」を表示します。</p>
       </Card>
       <Card className="p-6 mb-5 space-y-3">
         <h2 className="font-bold text-slate-700">受付完了画面の表示（プライバシー）</h2>
