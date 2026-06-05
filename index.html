@@ -300,6 +300,41 @@ const fmtDateTime = (iso) => {
 };
 const nowISO = () => new Date().toISOString();
 
+/* ============================ APIキー管理（DBリセットとは独立） ============================ */
+const API_KEY_STORAGE = "reception_anthropic_key";
+const getApiKey = () => localStorage.getItem(API_KEY_STORAGE) || "";
+const setApiKey = (k) => localStorage.setItem(API_KEY_STORAGE, k);
+
+/* ============================ Claude API呼び出し ============================ */
+async function callClaude(apiKey, userMessage) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+  });
+  if (!res.ok) throw new Error("API error: " + res.status);
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+/* ============================ 音声合成ヘルパー ============================ */
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP"; u.rate = 0.95; u.pitch = 1.0;
+  window.speechSynthesis.speak(u);
+}
+
 /* ============================ QRコード ============================ */
 function QR({ text, size = 140 }) {
   const ref = useRef(null);
@@ -337,6 +372,10 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
   const [cardStep, setCardStep] = useState("camera"); // camera | scanning | review
   const [cardName, setCardName] = useState("");
   const [cardCompany, setCardCompany] = useState("");
+  const [voiceStep, setVoiceStep] = useState("idle"); // idle|listening|processing|confirm|error
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceResult, setVoiceResult] = useState({ visitorName: "", company: "", host: "" });
+  const [voiceError, setVoiceError] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 1000);
@@ -438,6 +477,75 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     setCardName(""); setCardCompany("");
   };
 
+  // 音声受付
+  const startVoice = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError("お使いのブラウザは音声認識に対応していません。Chrome または Safari をお使いください。");
+      setVoiceStep("error"); return;
+    }
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      setVoiceError("管理画面の設定にAnthropicのAPIキーを入力してください。");
+      setVoiceStep("error"); return;
+    }
+    speak("マイクに向かってお話しください。お名前と会社名、ご担当者をおっしゃっていただくと受付が完了します。");
+    setVoiceStep("listening");
+    setVoiceTranscript("");
+    setVoiceError("");
+    const recog = new SpeechRecognition();
+    recog.lang = "ja-JP"; recog.continuous = false; recog.interimResults = true;
+    recog.onresult = (e) => {
+      const t = Array.from(e.results).map(r => r[0].transcript).join("");
+      setVoiceTranscript(t);
+    };
+    recog.onend = async () => {
+      if (!voiceTranscriptRef.current) {
+        setVoiceError("音声を認識できませんでした。もう一度お試しください。");
+        setVoiceStep("error"); return;
+      }
+      setVoiceStep("processing");
+      try {
+        const prompt = `受付での来訪者の発言から、氏名・会社名・社内担当者名を抽出してください。
+不明な場合は空文字にしてください。JSON形式のみ返してください。
+
+発言:「${voiceTranscriptRef.current}」
+
+{"visitorName":"","company":"","host":""}`;
+        const raw = await callClaude(getApiKey(), prompt);
+        const json = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+        setVoiceResult(json);
+        setVoiceStep("confirm");
+        const name = json.visitorName || "お客様";
+        speak(name + "様、いらっしゃいませ。内容をご確認ください。");
+      } catch(e) {
+        setVoiceError("解析に失敗しました: " + e.message);
+        setVoiceStep("error");
+      }
+    };
+    recog.onerror = (e) => {
+      setVoiceError("音声認識エラー: " + e.error);
+      setVoiceStep("error");
+    };
+    recog.start();
+  };
+  // onresult内でstateを参照するためrefを使う
+  const voiceTranscriptRef = useRef("");
+  useEffect(() => { voiceTranscriptRef.current = voiceTranscript; }, [voiceTranscript]);
+
+  const handleVoiceConfirm = () => {
+    if (!voiceResult.visitorName) return;
+    addLog({ name: voiceResult.visitorName, company: voiceResult.company,
+             type: "visitor", host: voiceResult.host || "（音声受付）" });
+    goDone(
+      welcomeMsg(voiceResult.company, voiceResult.visitorName),
+      "🎤 来訪者が音声で受付しました\n氏名: " + voiceResult.visitorName +
+      (voiceResult.company ? "（" + voiceResult.company + "）" : "") +
+      "\n受付時刻: " + fmtTime(nowISO())
+    );
+    setVoiceStep("idle");
+  };
+
   // 受付完了時のあいさつ文（プライバシー設定を反映）
   const welcomeMsg = (company, name) => {
     const mode = db.settings.greetingMode || "name";
@@ -514,7 +622,14 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
             <span>👆</span>
             <span className={th.btn.shine}>画面をタップして受付を開始</span>
           </div>
-          <div className={"fadeup-4 text-xs mt-5 " + th.footer}>RECEPTION · ユリーカ</div>
+          {/* 音声受付ボタン */}
+          {getApiKey() && (
+            <button onClick={e => { e.stopPropagation(); setVoiceStep("idle"); setScreen("voice"); }}
+              className="fadeup-4 mt-5 flex items-center gap-2 px-5 py-2 rounded-full bg-white/8 border border-white/15 text-white/60 text-sm hover:bg-white/15 hover:text-white/90 transition">
+              🎤 <span>音声で受付する</span>
+            </button>
+          )}
+          <div className={"fadeup-4 text-xs mt-4 " + th.footer}>RECEPTION · ユリーカ</div>
         </div>
       </KioskShell>
     );
@@ -649,6 +764,111 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      </KioskShell>
+    );
+  }
+
+  /* ---- 音声受付 ---- */
+  if (screen === "voice") {
+    const th = THEMES[db.settings.bgTheme || "obsidian"];
+    return (
+      <KioskShell bg={th.bg}>
+        <Header title="音声で受付" onBack={() => { window.speechSynthesis && window.speechSynthesis.cancel(); setScreen("standby"); }} />
+        <div className="flex-1 flex flex-col items-center justify-center px-10 text-white text-center">
+
+          {/* idle */}
+          {voiceStep === "idle" && (
+            <div className="pop flex flex-col items-center gap-6">
+              <div className="text-7xl">🎤</div>
+              <p className="text-xl text-slate-200">マイクに向かってお名前・会社名・<br />担当者名をお話しください</p>
+              <p className="text-sm text-slate-400">例：「田中物産の山田と申します。青山さんとのお約束です」</p>
+              <button onClick={startVoice}
+                className="mt-4 px-12 py-5 rounded-full bg-gradient-to-r from-sky-500 to-indigo-500 text-xl font-bold">
+                🎤 話しかける
+              </button>
+            </div>
+          )}
+
+          {/* listening */}
+          {voiceStep === "listening" && (
+            <div className="flex flex-col items-center gap-6 pop">
+              <div className="relative w-28 h-28">
+                <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
+                <div className="absolute inset-3 rounded-full bg-red-500/30 animate-ping" style={{animationDelay:"0.2s"}} />
+                <div className="relative z-10 w-full h-full rounded-full bg-red-500 flex items-center justify-center text-5xl">🎤</div>
+              </div>
+              <p className="text-2xl font-light">聞いています...</p>
+              {voiceTranscript && (
+                <div className="mt-2 px-6 py-3 rounded-xl bg-white/10 text-slate-200 text-lg max-w-md">
+                  「{voiceTranscript}」
+                </div>
+              )}
+              <p className="text-sm text-slate-400">話し終えると自動で解析します</p>
+            </div>
+          )}
+
+          {/* processing */}
+          {voiceStep === "processing" && (
+            <div className="flex flex-col items-center gap-6 pop">
+              <div className="w-16 h-16 border-4 border-sky-400 border-t-transparent rounded-full animate-spin" />
+              <p className="text-2xl font-light">AIが解析中...</p>
+              <div className="px-6 py-3 rounded-xl bg-white/10 text-slate-300 text-base max-w-md">
+                「{voiceTranscript}」
+              </div>
+            </div>
+          )}
+
+          {/* confirm */}
+          {voiceStep === "confirm" && (
+            <div className="w-full max-w-md pop">
+              <div className="text-emerald-300 text-sm mb-4 flex items-center justify-center gap-2">
+                ✓ 内容を認識しました。ご確認ください
+              </div>
+              <div className="space-y-3 mb-6">
+                <div>
+                  <label className="text-slate-400 text-xs">お名前 *</label>
+                  <input value={voiceResult.visitorName}
+                    onChange={e => setVoiceResult(v => ({...v, visitorName: e.target.value}))}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-xs">会社名</label>
+                  <input value={voiceResult.company}
+                    onChange={e => setVoiceResult(v => ({...v, company: e.target.value}))}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+                </div>
+                <div>
+                  <label className="text-slate-400 text-xs">担当者</label>
+                  <input value={voiceResult.host}
+                    onChange={e => setVoiceResult(v => ({...v, host: e.target.value}))}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { setVoiceStep("idle"); }}
+                  className="px-5 py-4 rounded-xl bg-white/10 border border-white/20">
+                  もう一度
+                </button>
+                <button onClick={handleVoiceConfirm} disabled={!voiceResult.visitorName}
+                  className="flex-1 py-4 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-xl font-bold disabled:opacity-40">
+                  受付する
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* error */}
+          {voiceStep === "error" && (
+            <div className="flex flex-col items-center gap-5 pop">
+              <div className="text-6xl">⚠️</div>
+              <p className="text-slate-300 text-base max-w-sm">{voiceError}</p>
+              <button onClick={() => setVoiceStep("idle")}
+                className="px-8 py-3 rounded-full bg-white/10 border border-white/20">
+                もう一度試す
+              </button>
             </div>
           )}
         </div>
@@ -1057,6 +1277,13 @@ function Settings({ db, setDB }) {
   const s = db.settings;
   const set = (patch) => setDB({ ...db, settings: { ...s, ...patch } });
   const [roomInput, setRoomInput] = useState("");
+  const [apiKeyInput, setApiKeyInput] = useState(getApiKey());
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+  const saveApiKey = () => {
+    setApiKey(apiKeyInput.trim());
+    setApiKeySaved(true);
+    setTimeout(() => setApiKeySaved(false), 2000);
+  };
   const [btnForm, setBtnForm] = useState({ label: "", sub: "", emoji: "🔔", color: BTN_COLORS[0].val, type: "custom" });
   const [addingBtn, setAddingBtn] = useState(false);
 
@@ -1248,6 +1475,34 @@ function Settings({ db, setDB }) {
       <Card className="p-6 mb-5 space-y-4">
         <h2 className="font-bold text-slate-700">Google Chat 通知</h2>
         <Field label="Incoming Webhook URL" value={s.chatWebhook} onChange={(v) => set({ chatWebhook: v })} />
+      </Card>
+      <Card className="p-6 mb-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="font-bold text-slate-700">AI音声受付</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">🎤 Claude API</span>
+        </div>
+        <p className="text-xs text-slate-500">
+          APIキーを設定すると待ち受け画面に「音声で受付する」ボタンが表示されます。<br/>
+          キーは <a href="https://console.anthropic.com" target="_blank" className="text-blue-500 underline">console.anthropic.com</a> → API Keys から発行してください。
+        </p>
+        <div className="flex gap-2">
+          <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)}
+            placeholder="sk-ant-api03-..."
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-sky-400 text-sm font-mono" />
+          <button onClick={saveApiKey}
+            className={"px-4 py-2 rounded-lg text-sm font-medium transition " +
+              (apiKeySaved ? "bg-emerald-500 text-white" : "bg-slate-800 text-white hover:bg-slate-700")}>
+            {apiKeySaved ? "✓ 保存済" : "保存"}
+          </button>
+        </div>
+        {getApiKey() && (
+          <div className="flex items-center gap-2 text-xs text-emerald-600">
+            ✓ APIキー設定済み — 待ち受け画面に🎤ボタンが表示されます
+          </div>
+        )}
+        <p className="text-xs text-slate-400">
+          ⚠️ このキーはブラウザのlocalStorageに保存されます。デモ・検証用途のみに使用してください。本番環境ではサーバーサイドで管理してください。
+        </p>
         <p className="text-xs text-slate-400">受付・退館時にこのWebhookへ通知を送信します。</p>
       </Card>
       <Card className="p-6 space-y-3">
