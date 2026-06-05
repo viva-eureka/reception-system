@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>受付システム ホットモック</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+                 "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+    background: #0f172a;
+  }
+  .no-tap { -webkit-tap-highlight-color: transparent; }
+  .ipad-frame {
+    box-shadow: 0 30px 80px rgba(0,0,0,.5);
+    border-radius: 38px;
+  }
+  @keyframes pop { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .pop { animation: pop .18s ease-out; }
+  @keyframes slidein { from{transform:translateY(-16px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .slidein { animation: slidein .25s ease-out; }
+
+  /* ---- 待ち受け画面リッチ演出 ---- */
+  @keyframes blob {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33%     { transform: translate(40px,-30px) scale(1.15); }
+    66%     { transform: translate(-30px,25px) scale(.9); }
+  }
+  .blob { filter: blur(60px); border-radius: 9999px; position: absolute; will-change: transform; }
+  @keyframes floaty {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-14px); }
+  }
+  .floaty { animation: floaty 5s ease-in-out infinite; }
+  @keyframes fadeup {
+    from { opacity:0; transform: translateY(20px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  .fadeup   { animation: fadeup .8s cubic-bezier(.2,.7,.2,1) both; }
+  .fadeup-2 { animation: fadeup .8s .15s cubic-bezier(.2,.7,.2,1) both; }
+  .fadeup-3 { animation: fadeup .8s .30s cubic-bezier(.2,.7,.2,1) both; }
+  .fadeup-4 { animation: fadeup .8s .45s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes glowpulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(56,189,248,.45), 0 8px 30px rgba(0,0,0,.35); }
+    50%     { box-shadow: 0 0 0 14px rgba(56,189,248,0), 0 8px 30px rgba(0,0,0,.35); }
+  }
+  .glowpulse { animation: glowpulse 2.4s ease-in-out infinite; }
+  @keyframes shine {
+    from { background-position: -200% center; }
+    to   { background-position: 200% center; }
+  }
+  .shine {
+    background: linear-gradient(100deg, #bae6fd 20%, #ffffff 40%, #93c5fd 55%, #bae6fd 75%);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shine 6s linear infinite;
+  }
+  .shine-gold {
+    background: linear-gradient(100deg, #b8972a 15%, #f5e27a 35%, #e0c040 50%, #f5e27a 65%, #b8972a 85%);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shine 5s linear infinite;
+  }
+  .shine-silver {
+    background: linear-gradient(100deg, #94a3b8 15%, #f1f5f9 35%, #cbd5e1 50%, #f1f5f9 65%, #94a3b8 85%);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shine 5s linear infinite;
+  }
+  @keyframes slowdrift {
+    0%,100% { transform: translate(0,0) scale(1) rotate(0deg); }
+    25%  { transform: translate(30px,-20px) scale(1.08) rotate(2deg); }
+    50%  { transform: translate(-20px,30px) scale(.95) rotate(-1deg); }
+    75%  { transform: translate(20px,10px) scale(1.05) rotate(1deg); }
+  }
+  @keyframes marbleShift {
+    0%,100% { background-position: 0% 50%; }
+    50%     { background-position: 100% 50%; }
+  }
+  @keyframes scanline {
+    0%   { top: 0%; opacity: 1; }
+    95%  { top: 100%; opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+  .scanline {
+    position: absolute; left: 0; right: 0; height: 2px; pointer-events: none;
+    animation: scanline 3s linear infinite;
+  }
+  /* テーマ切替ボタン */
+  .theme-chip {
+    width: 28px; height: 28px; border-radius: 9999px; border: 2px solid transparent;
+    cursor: pointer; transition: all .2s; flex-shrink: 0;
+  }
+  .theme-chip.active { border-color: white; transform: scale(1.25); box-shadow: 0 0 0 2px rgba(255,255,255,.4); }
+</style>
+</head>
+<body class="no-tap">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ============================ テーマ定義 ============================ */
+const THEMES = {
+  obsidian: {
+    label: "Obsidian Gold", swatch: "linear-gradient(135deg,#0a0a0f,#1a1408)",
+    bg: "linear-gradient(160deg,#080808 0%,#0e0c04 50%,#080808 100%)",
+    blobs: [
+      { color:"rgba(160,120,20,.30)", w:440, h:320, top:-80, left:-100, spd:"22s" },
+      { color:"rgba(100,80,10,.20)", w:300, h:300, bottom:-80, right:-60, spd:"28s reverse" },
+      { color:"rgba(180,140,30,.12)", w:200, h:200, top:"50%", left:"40%", spd:"18s" },
+    ],
+    grid: "rgba(255,220,80,.05)",
+    dots: { main:"rgba(230,190,60,.85)", red:"rgba(230,190,60,.85)" },
+    accent: "#c9a84c",
+    greetEn: "tracking-[0.4em] text-xs text-amber-300/70 font-light",
+    greetJp: "text-amber-100/80 text-base font-light",
+    lineColor: "bg-amber-500/30",
+    logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(0,0,0,.8), 0 0 0 1px rgba(200,160,50,.25)" },
+    clock: "text-white/90 font-thin",
+    clockSub: "text-amber-300/60",
+    date: "text-amber-100/40 text-sm tracking-widest font-light",
+    btn: { from:"#8a6a10", to:"#c9a030", glow:"rgba(180,140,30,.5)", shine:"shine-gold" },
+    footer: "text-amber-700/40 tracking-[0.35em]",
+  },
+  ink: {
+    label: "Ink", swatch: "linear-gradient(135deg,#05080f,#0a0f1e)",
+    bg: "linear-gradient(170deg,#020408 0%,#060c1a 60%,#020408 100%)",
+    blobs: [
+      { color:"rgba(80,100,180,.18)", w:500, h:400, top:-120, left:-120, spd:"30s" },
+      { color:"rgba(60,80,150,.12)", w:350, h:350, bottom:-100, right:-80, spd:"25s reverse" },
+    ],
+    grid: "rgba(200,210,255,.035)",
+    dots: { main:"rgba(200,210,255,.7)", red:"rgba(200,100,80,.7)" },
+    accent: "#94a3b8",
+    greetEn: "tracking-[0.5em] text-xs text-slate-400/60 font-light",
+    greetJp: "text-slate-300/70 text-base font-light",
+    lineColor: "bg-slate-600/40",
+    logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.06)" },
+    clock: "text-white/80 font-thin",
+    clockSub: "text-slate-500/70",
+    date: "text-slate-500/50 text-sm tracking-widest font-light",
+    btn: { from:"#1e293b", to:"#334155", glow:"rgba(148,163,184,.3)", shine:"shine-silver" },
+    footer: "text-slate-700/50 tracking-[0.4em]",
+  },
+  marble: {
+    label: "Dark Marble", swatch: "linear-gradient(135deg,#131218,#1e1a2e)",
+    bg: "linear-gradient(135deg,#0d0b14 0%,#1a1625 30%,#120f1d 60%,#0d0b14 100%)",
+    blobs: [
+      { color:"rgba(80,40,120,.35)", w:500, h:350, top:-100, left:-80, spd:"35s" },
+      { color:"rgba(60,20,100,.25)", w:400, h:400, bottom:-120, right:-100, spd:"28s reverse" },
+      { color:"rgba(120,60,160,.15)", w:250, h:250, top:"40%", left:"30%", spd:"20s" },
+    ],
+    grid: "rgba(200,160,255,.04)",
+    dots: { main:"rgba(180,140,255,.7)", red:"rgba(220,100,80,.8)" },
+    accent: "#a78bfa",
+    greetEn: "tracking-[0.4em] text-xs text-violet-300/60 font-light",
+    greetJp: "text-violet-100/70 text-base font-light",
+    lineColor: "bg-violet-500/25",
+    logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(0,0,0,.85), 0 0 0 1px rgba(160,100,255,.15)" },
+    clock: "text-white/85 font-thin",
+    clockSub: "text-violet-400/60",
+    date: "text-violet-200/30 text-sm tracking-widest font-light",
+    btn: { from:"#4c1d95", to:"#6d28d9", glow:"rgba(139,92,246,.45)", shine:"shine-silver" },
+    footer: "text-violet-800/40 tracking-[0.35em]",
+  },
+  midnight: {
+    label: "Midnight", swatch: "linear-gradient(135deg,#080e1e,#0f1f3d)",
+    bg: "linear-gradient(160deg,#050a14 0%,#0a1428 50%,#050a14 100%)",
+    blobs: [
+      { color:"rgba(30,80,200,.30)", w:420, h:320, top:-100, left:-100, spd:"18s" },
+      { color:"rgba(60,80,200,.22)", w:360, h:360, bottom:-100, right:-80, spd:"24s reverse" },
+      { color:"rgba(200,60,40,.18)", w:220, h:220, top:"52%", left:"6%", spd:"22s" },
+    ],
+    grid: "rgba(100,160,255,.04)",
+    dots: { main:"rgba(125,211,252,.75)", red:"rgba(224,64,44,.85)" },
+    accent: "#38bdf8",
+    greetEn: "tracking-[0.35em] text-xs text-sky-300/70 font-light",
+    greetJp: "text-sky-100/80 text-base",
+    lineColor: "bg-sky-500/30",
+    logoCard: { bg:"#fff", shadow:"0 25px 70px rgba(2,16,43,.7)" },
+    clock: "text-white/90 font-extralight",
+    clockSub: "text-sky-300/70",
+    date: "text-slate-400/60 text-sm tracking-wide",
+    btn: { from:"#0369a1", to:"#4f46e5", glow:"rgba(56,189,248,.45)", shine:"shine" },
+    footer: "text-slate-600/50 tracking-widest",
+  },
+  crimson: {
+    label: "Crimson", swatch: "linear-gradient(135deg,#0d0608,#1a0508)",
+    bg: "linear-gradient(160deg,#080305 0%,#120408 50%,#080305 100%)",
+    blobs: [
+      { color:"rgba(180,20,20,.28)", w:460, h:340, top:-100, left:-80, spd:"24s" },
+      { color:"rgba(120,10,10,.20)", w:380, h:380, bottom:-100, right:-80, spd:"20s reverse" },
+      { color:"rgba(200,40,20,.12)", w:220, h:220, top:"45%", left:"35%", spd:"18s" },
+    ],
+    grid: "rgba(255,100,80,.04)",
+    dots: { main:"rgba(255,180,160,.7)", red:"rgba(224,64,44,.9)" },
+    accent: "#f87171",
+    greetEn: "tracking-[0.4em] text-xs text-red-300/60 font-light",
+    greetJp: "text-red-100/75 text-base font-light",
+    lineColor: "bg-red-500/25",
+    logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(20,0,0,.85), 0 0 0 1px rgba(200,60,40,.2)" },
+    clock: "text-white/85 font-thin",
+    clockSub: "text-red-400/60",
+    date: "text-red-200/30 text-sm tracking-widest font-light",
+    btn: { from:"#7f1d1d", to:"#b91c1c", glow:"rgba(239,68,68,.45)", shine:"shine-silver" },
+    footer: "text-red-900/50 tracking-[0.35em]",
+  },
+};
+const THEME_ORDER = ["obsidian","ink","marble","midnight","crimson"];
+const BRAND_BLUE = "#1b4f8f";
+const BRAND_RED = "#e0402c";
+function Logo({ width = 300 }) {
+  return <img src="assets/logo.png" alt="株式会社ユリーカ"
+    style={{ width: width + "px", height: "auto", display: "block" }} />;
+}
+
+/* ============================ モックDB (localStorage) ============================ */
+const DB_KEY = "reception_mock_v2";
+
+const defaultDB = () => ({
+  settings: {
+    companyName: "株式会社ユリーカ",
+    tagline: "SIMPLEVOLUTION.",
+    openTime: "09:00",
+    closeTime: "18:00",
+    greetingMode: "name", // full=会社名+氏名 / name=氏名のみ / generic=汎用文のみ
+    bgTheme: "obsidian", // obsidian|ink|marble|midnight|crimson
+    chatWebhook: "https://chat.googleapis.com/v1/spaces/AAAA.../messages?key=...（デモ）",
+    rooms: ["会議室A", "会議室B", "応接室"],
+  },
+  invitations: [
+    { id: "inv1", code: "VE-7F3K9A", visitorName: "山田 太郎", company: "株式会社サンプル商事",
+      host: "青山 雅志", date: "2026-06-05", time: "14:00", room: "会議室A", emailSent: true, used: false },
+    { id: "inv2", code: "VE-2QH8XZ", visitorName: "佐藤 花子", company: "テスト工業株式会社",
+      host: "鈴木 一郎", date: "2026-06-05", time: "15:30", room: "応接室", emailSent: true, used: false },
+  ],
+  logs: [
+    { id: "l1", name: "田中 健", company: "ABCコンサルティング", type: "visitor", host: "青山 雅志",
+      action: "入館", ts: "2026-06-05T09:42:00" },
+    { id: "l2", name: "ヤマト運輸", company: "", type: "delivery", host: "",
+      action: "入館", ts: "2026-06-05T10:15:00" },
+    { id: "l3", name: "田中 健", company: "ABCコンサルティング", type: "visitor", host: "青山 雅志",
+      action: "退館", ts: "2026-06-05T10:58:00" },
+  ],
+});
+
+function loadDB() {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  const d = defaultDB();
+  localStorage.setItem(DB_KEY, JSON.stringify(d));
+  return d;
+}
+function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+
+/* ============================ ユーティリティ ============================ */
+const uid = () => Math.random().toString(36).slice(2, 9);
+const genCode = () => "VE-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+const fmtTime = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+};
+const fmtDateTime = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
+const nowISO = () => new Date().toISOString();
+
+/* ============================ QRコード ============================ */
+function QR({ text, size = 140 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = "";
+    new QRCode(ref.current, { text, width: size, height: size, correctLevel: QRCode.CorrectLevel.M });
+  }, [text, size]);
+  return <div ref={ref} className="inline-block bg-white p-2 rounded-lg" />;
+}
+
+/* ============================ トースト（Google Chat通知の演出） ============================ */
+function ChatToast({ toast }) {
+  if (!toast) return null;
+  return (
+    <div className="fixed top-5 right-5 z-50 slidein">
+      <div className="w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2 bg-[#1a73e8] text-white text-sm font-medium">
+          <span className="text-lg">💬</span> Google Chat 通知（送信しました）
+        </div>
+        <div className="px-4 py-3 text-sm text-slate-700 whitespace-pre-line">{toast}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ 受付端末（キオスク） ============================ */
+function Kiosk({ db, setDB, notify, forceClosed }) {
+  const [screen, setScreen] = useState("standby"); // standby|menu|visitor|keyboard|done
+  const [clock, setClock] = useState(new Date());
+  const [doneMsg, setDoneMsg] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [companyInput, setCompanyInput] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [cardStep, setCardStep] = useState("camera"); // camera | scanning | review
+  const [cardName, setCardName] = useState("");
+  const [cardCompany, setCardCompany] = useState("");
+
+  useEffect(() => {
+    const t = setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const isOpen = () => {
+    if (forceClosed) return false;
+    const { openTime, closeTime } = db.settings;
+    const cur = clock.toTimeString().slice(0, 5);
+    return cur >= openTime && cur <= closeTime;
+  };
+
+  const greeting = () => {
+    const h = clock.getHours();
+    if (h < 5) return { jp: "おそくまでお疲れさまです", en: "GOOD EVENING" };
+    if (h < 11) return { jp: "おはようございます", en: "GOOD MORNING" };
+    if (h < 17) return { jp: "ようこそお越しくださいました", en: "WELCOME" };
+    return { jp: "こんばんは", en: "GOOD EVENING" };
+  };
+
+  const addLog = (entry) => {
+    const next = { ...db, logs: [{ id: uid(), ts: nowISO(), action: "入館", ...entry }, ...db.logs] };
+    setDB(next);
+  };
+
+  const goDone = (msg, chatMsg) => {
+    setDoneMsg(msg);
+    setScreen("done");
+    notify(chatMsg);
+    setTimeout(() => setScreen("standby"), 4500);
+  };
+
+  const handleDelivery = () => {
+    addLog({ name: "配送業者", company: "", type: "delivery", host: "" });
+    goDone(
+      "受付ありがとうございます。\n担当者がまいりますので少々お待ちください。",
+      "📦 配送業者が受付に到着しました\n受付時刻: " + fmtTime(nowISO())
+    );
+  };
+
+  const handleQRScan = (inv) => {
+    setPickerOpen(false);
+    const next = {
+      ...db,
+      invitations: db.invitations.map((i) => i.id === inv.id ? { ...i, used: true } : i),
+      logs: [{ id: uid(), ts: nowISO(), action: "入館", name: inv.visitorName, company: inv.company,
+               type: "visitor", host: inv.host }, ...db.logs],
+    };
+    setDB(next);
+    goDone(
+      welcomeMsg(inv.company, inv.visitorName),
+      "🙋 来訪者が受付に到着しました\n氏名: " + inv.visitorName + "（" + inv.company + "）\n担当: " +
+      inv.host + " さん\n会議室: " + (inv.room || "未設定") + "\n受付時刻: " + fmtTime(nowISO())
+    );
+  };
+
+  const handleKeyboard = () => {
+    if (!nameInput.trim()) return;
+    addLog({ name: nameInput.trim(), company: companyInput.trim(), type: "visitor", host: "（受付入力）" });
+    goDone(
+      nameInput.trim() + " 様、ようこそお越しくださいました。\n担当者へお取り次ぎいたします。",
+      "🙋 来訪者が受付に到着しました（キーボード入力）\n氏名: " + nameInput.trim() +
+      (companyInput.trim() ? "（" + companyInput.trim() + "）" : "") + "\n受付時刻: " + fmtTime(nowISO())
+    );
+    setNameInput(""); setCompanyInput("");
+  };
+
+  // 名刺撮影 → OCR（デモ：読み取り結果をシミュレート）
+  const sampleCards = [
+    { name: "田中 大輔", company: "株式会社グローバルテック" },
+    { name: "高橋 美咲", company: "みらい設計事務所" },
+    { name: "渡辺 隆", company: "株式会社ニッポン物産" },
+  ];
+  const captureCard = () => {
+    setCardStep("scanning");
+    const pick = sampleCards[clock.getSeconds() % sampleCards.length];
+    setTimeout(() => {
+      setCardName(pick.name);
+      setCardCompany(pick.company);
+      setCardStep("review");
+    }, 1600);
+  };
+  const handleCard = () => {
+    if (!cardName.trim()) return;
+    addLog({ name: cardName.trim(), company: cardCompany.trim(), type: "visitor", host: "（名刺受付）" });
+    goDone(
+      welcomeMsg(cardCompany.trim(), cardName.trim()),
+      "🙋 来訪者が受付に到着しました（名刺受付）\n氏名: " + cardName.trim() +
+      (cardCompany.trim() ? "（" + cardCompany.trim() + "）" : "") + "\n受付時刻: " + fmtTime(nowISO())
+    );
+    setCardName(""); setCardCompany("");
+  };
+
+  // 受付完了時のあいさつ文（プライバシー設定を反映）
+  const welcomeMsg = (company, name) => {
+    const mode = db.settings.greetingMode || "name";
+    if (mode === "generic") return "ようこそお越しくださいました。\n担当者へお取り次ぎいたします。";
+    if (mode === "full" && company)
+      return "いらっしゃいませ\n" + company + "\n" + name + " 様\n\n担当者がまいります。少々お待ちください。";
+    return "いらっしゃいませ\n" + name + " 様\n\n担当者がまいります。少々お待ちください。";
+  };
+
+  /* ---- 営業時間外 ---- */
+  if (!isOpen() && screen === "standby") {
+    return (
+      <KioskShell>
+        <div className="flex-1 flex flex-col items-center justify-center text-center text-white px-10">
+          <div className="text-5xl mb-6">🌙</div>
+          <div className="text-3xl font-bold mb-3">ただいま営業時間外です</div>
+          <div className="text-slate-300 text-lg">
+            受付時間 {db.settings.openTime} 〜 {db.settings.closeTime}
+          </div>
+          <div className="mt-10 text-slate-400 text-sm">{db.settings.companyName}</div>
+        </div>
+      </KioskShell>
+    );
+  }
+
+  /* ---- 待ち受け ---- */
+  if (screen === "standby") {
+    const th = THEMES[db.settings.bgTheme || "obsidian"];
+    return (
+      <KioskShell bg={th.bg}>
+        <StandbyDecor theme={th} />
+        {/* テーマ切替（右下固定・小さく目立たない） */}
+        <div className="absolute bottom-3 right-4 z-20 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {THEME_ORDER.map(k => (
+            <button key={k} className={"theme-chip " + ((db.settings.bgTheme||"obsidian")===k?"active":"")}
+              style={{ background: THEMES[k].swatch }}
+              onClick={() => { setDB({ ...db, settings: { ...db.settings, bgTheme: k } }); }} />
+          ))}
+        </div>
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-10 cursor-pointer select-none" onClick={() => setScreen("menu")}>
+          {/* あいさつ */}
+          <div className={"fadeup flex items-center gap-3 mb-0.5"}>
+            <span className={"h-px w-6 " + th.lineColor} />
+            <span className={th.greetEn}>{greeting().en}</span>
+            <span className={"h-px w-6 " + th.lineColor} />
+          </div>
+          <div className={"fadeup mb-7 " + th.greetJp}>{greeting().jp}</div>
+
+          {/* ロゴ */}
+          <div className="fadeup-2 floaty rounded-3xl px-10 py-7 mb-8"
+               style={{ background: th.logoCard.bg, boxShadow: th.logoCard.shadow }}>
+            <Logo width={360} />
+          </div>
+
+          {/* 時計 */}
+          <div className="fadeup-3 flex items-end gap-1 tabular-nums leading-none">
+            <span className={"text-8xl tracking-tight " + th.clock}>
+              {clock.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <span className={"text-2xl mb-2.5 w-9 text-left font-light " + th.clockSub}>
+              {String(clock.getSeconds()).padStart(2, "0")}
+            </span>
+          </div>
+          <div className={"fadeup-3 mt-3 " + th.date}>
+            {clock.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+          </div>
+
+          {/* 開始ボタン */}
+          <div className="fadeup-4 mt-12 px-10 py-4 rounded-full text-base font-medium flex items-center gap-3 cursor-pointer"
+               style={{ background: `linear-gradient(to right, ${th.btn.from}, ${th.btn.to})`,
+                        boxShadow: `0 0 0 0 ${th.btn.glow}, 0 8px 30px rgba(0,0,0,.4)`,
+                        animation: `glowpulse 2.6s ease-in-out infinite` }}>
+            <span>👆</span>
+            <span className={th.btn.shine}>画面をタップして受付を開始</span>
+          </div>
+          <div className={"fadeup-4 text-xs mt-5 " + th.footer}>RECEPTION · ユリーカ</div>
+        </div>
+      </KioskShell>
+    );
+  }
+
+  /* ---- メニュー ---- */
+  if (screen === "menu") {
+    return (
+      <KioskShell>
+        <Header title="ご用件をお選びください" onBack={() => setScreen("standby")} />
+        <div className="flex-1 grid grid-cols-2 gap-5 p-8">
+          <BigButton emoji="📦" label="配送業者の方" sub="ボタンひとつで担当者を呼び出します"
+            color="from-amber-400 to-orange-500" onClick={handleDelivery} />
+          <BigButton emoji="🙋" label="ご予約・招待の方" sub="QRコード または お名前で受付"
+            color="from-sky-400 to-indigo-500" onClick={() => setScreen("visitor")} />
+        </div>
+      </KioskShell>
+    );
+  }
+
+  /* ---- 来訪者: QR / キーボード 選択 ---- */
+  if (screen === "visitor") {
+    return (
+      <KioskShell>
+        <Header title="受付方法をお選びください" onBack={() => setScreen("menu")} />
+        <div className="flex-1 grid grid-cols-3 gap-4 p-8">
+          <BigButton emoji="📷" label="QRコードをかざす" sub="招待メールのQRを読み取ります"
+            color="from-emerald-400 to-teal-500" onClick={() => setPickerOpen(true)} />
+          <BigButton emoji="💳" label="名刺を撮影" sub="名刺をかざすと自動で読み取ります"
+            color="from-sky-400 to-blue-500" onClick={() => { setCardStep("camera"); setScreen("card"); }} />
+          <BigButton emoji="⌨️" label="お名前を入力" sub="キーボードで受付します"
+            color="from-violet-400 to-purple-500" onClick={() => setScreen("keyboard")} />
+        </div>
+
+        {pickerOpen && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center p-8 pop"
+               onClick={() => setPickerOpen(false)}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-lg mb-1">
+                📷 QRスキャン（デモ）
+              </div>
+              <p className="text-sm text-slate-500 mb-4">
+                実機ではカメラでQRを自動読取します。デモ用に招待客を選んでください。
+              </p>
+              <div className="space-y-2">
+                {db.invitations.filter((i) => !i.used).map((i) => (
+                  <button key={i.id} onClick={() => handleQRScan(i)}
+                    className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-sky-50 hover:border-sky-300 transition">
+                    <div className="font-semibold text-slate-800">{i.visitorName} 様</div>
+                    <div className="text-xs text-slate-500">{i.company} ／ 担当: {i.host} ／ {i.room}</div>
+                  </button>
+                ))}
+                {db.invitations.filter((i) => !i.used).length === 0 && (
+                  <div className="text-sm text-slate-400 py-6 text-center">
+                    受付可能な招待がありません。<br />管理画面で招待を作成してください。
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </KioskShell>
+    );
+  }
+
+  /* ---- 名刺撮影 ---- */
+  if (screen === "card") {
+    return (
+      <KioskShell>
+        <Header title="名刺を撮影してください" onBack={() => setScreen("visitor")} />
+        <div className="flex-1 p-8 flex flex-col items-center justify-center">
+          {cardStep !== "review" && (
+            <>
+              <div className="relative w-[460px] max-w-full aspect-[1.7/1] rounded-2xl bg-slate-950 border border-white/10 overflow-hidden flex items-center justify-center">
+                {/* ガイド枠 */}
+                <div className="absolute inset-6 rounded-xl border-2 border-dashed border-sky-400/50" />
+                <Corner pos="top-3 left-3" /><Corner pos="top-3 right-3 rotate-90" />
+                <Corner pos="bottom-3 left-3 -rotate-90" /><Corner pos="bottom-3 right-3 rotate-180" />
+                {/* 名刺プレビュー風 */}
+                <div className="w-[78%] aspect-[1.7/1] rounded-lg bg-gradient-to-br from-slate-100 to-slate-300 shadow-lg flex flex-col justify-center px-5">
+                  <div className="h-2 w-20 bg-slate-400 rounded mb-2" />
+                  <div className="h-3 w-32 bg-slate-600 rounded mb-1" />
+                  <div className="h-2 w-24 bg-slate-400 rounded" />
+                </div>
+                {cardStep === "scanning" && (
+                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white">
+                    <div className="w-10 h-10 border-4 border-sky-400 border-t-transparent rounded-full animate-spin mb-3" />
+                    <div className="text-sm tracking-widest">読み取り中…</div>
+                  </div>
+                )}
+              </div>
+              <p className="text-slate-400 text-sm mt-4">枠内に名刺を置いてください（実機ではカメラで自動認識）</p>
+              <button onClick={captureCard} disabled={cardStep === "scanning"}
+                className="mt-6 px-10 py-4 rounded-full bg-gradient-to-r from-sky-500 to-blue-500 text-white text-xl font-bold disabled:opacity-50 flex items-center gap-2">
+                📸 撮影する
+              </button>
+            </>
+          )}
+
+          {cardStep === "review" && (
+            <div className="w-full max-w-md pop">
+              <div className="text-emerald-300 text-sm mb-3 flex items-center gap-2">
+                ✓ 名刺を読み取りました。内容をご確認ください
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-slate-300 text-sm">お名前 *</label>
+                  <input value={cardName} onChange={(e) => setCardName(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+                </div>
+                <div>
+                  <label className="text-slate-300 text-sm">会社名</label>
+                  <input value={cardCompany} onChange={(e) => setCardCompany(e.target.value)}
+                    className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => setCardStep("camera")}
+                    className="px-5 py-4 rounded-xl bg-white/10 text-white border border-white/20">撮り直す</button>
+                  <button onClick={handleCard} disabled={!cardName.trim()}
+                    className="flex-1 py-4 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-white text-xl font-bold disabled:opacity-40">
+                    受付する
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </KioskShell>
+    );
+  }
+
+  /* ---- キーボード入力 ---- */
+  if (screen === "keyboard") {
+    return (
+      <KioskShell>
+        <Header title="お名前をご入力ください" onBack={() => setScreen("visitor")} />
+        <div className="flex-1 p-10 flex flex-col items-center">
+          <div className="w-full max-w-md space-y-4">
+            <div>
+              <label className="text-slate-300 text-sm">お名前 *</label>
+              <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} autoFocus
+                placeholder="山田 太郎"
+                className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+            </div>
+            <div>
+              <label className="text-slate-300 text-sm">会社名（任意）</label>
+              <input value={companyInput} onChange={(e) => setCompanyInput(e.target.value)}
+                placeholder="株式会社サンプル"
+                className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
+            </div>
+            <button onClick={handleKeyboard} disabled={!nameInput.trim()}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 text-white text-xl font-bold disabled:opacity-40 mt-2">
+              受付する
+            </button>
+          </div>
+        </div>
+      </KioskShell>
+    );
+  }
+
+  /* ---- 受付完了 ---- */
+  if (screen === "done") {
+    return (
+      <KioskShell>
+        <div className="flex-1 flex flex-col items-center justify-center text-center text-white px-10 pop">
+          <div className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center text-5xl mb-6">✓</div>
+          <div className="text-3xl font-bold mb-4">受付が完了しました</div>
+          <div className="text-slate-200 text-lg whitespace-pre-line leading-relaxed">{doneMsg}</div>
+          <div className="mt-10 text-sky-300 text-sm">💬 担当者へ通知しました</div>
+        </div>
+      </KioskShell>
+    );
+  }
+  return null;
+}
+
+function KioskShell({ children, onClick, bg }) {
+  return (
+    <div onClick={onClick}
+      className="relative w-full h-full flex flex-col overflow-hidden"
+      style={{ background: bg || "linear-gradient(160deg,#050a14,#0a1428)" }}>
+      {children}
+    </div>
+  );
+}
+
+function StandbyDecor({ theme: th }) {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {th.blobs.map((b, i) => (
+        <div key={i} className="blob" style={{
+          width: b.w, height: b.h,
+          top: b.top, left: b.left, bottom: b.bottom, right: b.right,
+          background: `radial-gradient(circle, ${b.color}, transparent 70%)`,
+          animation: `slowdrift ${b.spd} ease-in-out infinite`,
+        }} />
+      ))}
+    </div>
+  );
+}
+function Header({ title, onBack }) {
+  return (
+    <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
+      <button onClick={onBack}
+        className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center text-xl">←</button>
+      <div className="text-white text-xl font-bold">{title}</div>
+    </div>
+  );
+}
+function Corner({ pos }) {
+  return <div className={"absolute w-6 h-6 border-t-2 border-l-2 border-sky-400 " + pos} />;
+}
+function BigButton({ emoji, label, sub, color, onClick }) {
+  return (
+    <button onClick={onClick}
+      className={"rounded-3xl bg-gradient-to-br " + color + " text-white flex flex-col items-center justify-center p-6 shadow-xl active:scale-95 transition"}>
+      <div className="text-6xl mb-4">{emoji}</div>
+      <div className="text-2xl font-bold">{label}</div>
+      <div className="text-sm opacity-90 mt-2 text-center">{sub}</div>
+    </button>
+  );
+}
+
+/* ============================ 管理画面 ============================ */
+function Admin({ db, setDB, notify }) {
+  const [tab, setTab] = useState("dashboard");
+  const tabs = [
+    ["dashboard", "ダッシュボード", "📊"],
+    ["logs", "入退館記録", "📋"],
+    ["invites", "招待管理", "✉️"],
+    ["settings", "設定", "⚙️"],
+  ];
+  return (
+    <div className="w-full h-full flex bg-slate-50">
+      <aside className="w-56 bg-slate-900 text-white flex flex-col py-6 px-3 shrink-0">
+        <div className="px-3 mb-8">
+          <div className="bg-white rounded-lg p-2 inline-block"><Logo width={160} /></div>
+          <div className="text-xs text-slate-400 mt-2">受付管理コンソール</div>
+        </div>
+        {tabs.map(([k, label, icon]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={"flex items-center gap-3 px-3 py-3 rounded-lg mb-1 text-left transition " +
+              (tab === k ? "bg-sky-500 text-white" : "text-slate-300 hover:bg-white/10")}>
+            <span>{icon}</span> {label}
+          </button>
+        ))}
+        <div className="mt-auto px-3 text-xs text-slate-500">{db.settings.companyName}</div>
+      </aside>
+      <main className="flex-1 overflow-auto p-8">
+        {tab === "dashboard" && <Dashboard db={db} />}
+        {tab === "logs" && <Logs db={db} setDB={setDB} notify={notify} />}
+        {tab === "invites" && <Invites db={db} setDB={setDB} notify={notify} />}
+        {tab === "settings" && <Settings db={db} setDB={setDB} />}
+      </main>
+    </div>
+  );
+}
+
+function Card({ children, className = "" }) {
+  return <div className={"bg-white rounded-2xl border border-slate-200 shadow-sm " + className}>{children}</div>;
+}
+
+function Dashboard({ db }) {
+  const today = "2026-06-05";
+  const visitorsIn = db.logs.filter((l) => l.action === "入館" && l.type === "visitor").length;
+  const deliveries = db.logs.filter((l) => l.type === "delivery").length;
+  const inBuilding = db.logs.filter((l) => l.type === "visitor")
+    .reduce((acc, l) => { acc[l.name] = l.action; return acc; }, {});
+  const currentlyIn = Object.values(inBuilding).filter((a) => a === "入館").length;
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">ダッシュボード</h1>
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <Stat label="本日の来訪者" value={visitorsIn} unit="名" color="text-sky-600" />
+        <Stat label="配送受付" value={deliveries} unit="件" color="text-amber-600" />
+        <Stat label="現在 在館中" value={currentlyIn} unit="名" color="text-emerald-600" />
+        <Stat label="本日の招待" value={db.invitations.length} unit="件" color="text-violet-600" />
+      </div>
+      <Card className="p-6">
+        <h2 className="font-bold text-slate-700 mb-4">直近の動き</h2>
+        <div className="space-y-2">
+          {db.logs.slice(0, 6).map((l) => (
+            <div key={l.id} className="flex items-center gap-3 text-sm">
+              <span className={"w-2 h-2 rounded-full " + (l.action === "入館" ? "bg-emerald-500" : "bg-slate-300")} />
+              <span className="text-slate-400 w-16">{fmtTime(l.ts)}</span>
+              <span className="font-medium text-slate-700">{l.name}</span>
+              {l.company && <span className="text-slate-400">{l.company}</span>}
+              <span className={"ml-auto text-xs px-2 py-0.5 rounded-full " +
+                (l.type === "delivery" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700")}>
+                {l.type === "delivery" ? "配送" : "来訪"} / {l.action}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+function Stat({ label, value, unit, color }) {
+  return (
+    <Card className="p-5">
+      <div className="text-slate-500 text-sm">{label}</div>
+      <div className={"text-3xl font-bold mt-1 " + color}>{value}<span className="text-base font-normal text-slate-400 ml-1">{unit}</span></div>
+    </Card>
+  );
+}
+
+function Logs({ db, setDB, notify }) {
+  const checkout = (log) => {
+    const next = { ...db, logs: [{ id: uid(), ts: nowISO(), action: "退館", name: log.name,
+      company: log.company, type: log.type, host: log.host }, ...db.logs] };
+    setDB(next);
+    notify("👋 退館しました\n氏名: " + log.name + "\n退館時刻: " + fmtTime(nowISO()));
+  };
+  // 在館判定
+  const status = {};
+  [...db.logs].reverse().forEach((l) => { status[l.name] = l.action; });
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">入退館記録</h1>
+      <Card className="overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-slate-500">
+            <tr>
+              <th className="text-left px-5 py-3">時刻</th>
+              <th className="text-left px-5 py-3">氏名</th>
+              <th className="text-left px-5 py-3">会社</th>
+              <th className="text-left px-5 py-3">区分</th>
+              <th className="text-left px-5 py-3">動作</th>
+              <th className="text-left px-5 py-3">担当</th>
+              <th className="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {db.logs.map((l) => (
+              <tr key={l.id} className="border-t border-slate-100">
+                <td className="px-5 py-3 text-slate-500">{fmtDateTime(l.ts)}</td>
+                <td className="px-5 py-3 font-medium text-slate-800">{l.name}</td>
+                <td className="px-5 py-3 text-slate-500">{l.company || "—"}</td>
+                <td className="px-5 py-3">
+                  <span className={"text-xs px-2 py-0.5 rounded-full " +
+                    (l.type === "delivery" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700")}>
+                    {l.type === "delivery" ? "配送" : "来訪"}
+                  </span>
+                </td>
+                <td className="px-5 py-3">
+                  <span className={l.action === "入館" ? "text-emerald-600 font-medium" : "text-slate-400"}>{l.action}</span>
+                </td>
+                <td className="px-5 py-3 text-slate-500">{l.host || "—"}</td>
+                <td className="px-5 py-3 text-right">
+                  {l.type === "visitor" && status[l.name] === "入館" && (
+                    <button onClick={() => checkout(l)}
+                      className="text-xs px-3 py-1 rounded-full bg-slate-800 text-white hover:bg-slate-700">退館にする</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Invites({ db, setDB, notify }) {
+  const [form, setForm] = useState({ visitorName: "", company: "", host: "", date: "2026-06-05",
+    time: "14:00", room: db.settings.rooms[0], email: "" });
+  const [created, setCreated] = useState(null);
+
+  const create = () => {
+    if (!form.visitorName.trim()) return;
+    const inv = { id: uid(), code: genCode(), ...form, emailSent: false, used: false };
+    setDB({ ...db, invitations: [inv, ...db.invitations] });
+    setCreated(inv);
+    setForm({ visitorName: "", company: "", host: "", date: "2026-06-05", time: "14:00",
+      room: db.settings.rooms[0], email: "" });
+  };
+  const sendEmail = (inv) => {
+    setDB({ ...db, invitations: db.invitations.map((i) => i.id === inv.id ? { ...i, emailSent: true } : i) });
+    notify("✉️ 招待メールを送信しました（デモ）\n宛先: " + (inv.email || inv.visitorName) +
+      "\nQRコード添付済 / 会議室: " + inv.room);
+  };
+  const remove = (id) => setDB({ ...db, invitations: db.invitations.filter((i) => i.id !== id) });
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">招待管理</h1>
+      <div className="grid grid-cols-3 gap-6">
+        <Card className="p-6 col-span-1 h-fit">
+          <h2 className="font-bold text-slate-700 mb-4">新規招待を作成</h2>
+          <div className="space-y-3 text-sm">
+            <Field label="来訪者名 *" value={form.visitorName} onChange={(v) => setForm({ ...form, visitorName: v })} />
+            <Field label="会社名" value={form.company} onChange={(v) => setForm({ ...form, company: v })} />
+            <Field label="メールアドレス" value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
+            <Field label="担当者" value={form.host} onChange={(v) => setForm({ ...form, host: v })} />
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="日付" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+              <Field label="時刻" type="time" value={form.time} onChange={(v) => setForm({ ...form, time: v })} />
+            </div>
+            <div>
+              <label className="text-slate-500">会議室</label>
+              <select value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })}
+                className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-sky-400">
+                {db.settings.rooms.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 pt-1">
+              <span>📅</span> 作成時にGoogleカレンダー＋会議室を仮押さえ（デモ表示）
+            </div>
+            <button onClick={create} disabled={!form.visitorName.trim()}
+              className="w-full py-2.5 rounded-lg bg-sky-500 text-white font-bold disabled:opacity-40 mt-1">
+              招待を作成
+            </button>
+          </div>
+        </Card>
+
+        <div className="col-span-2 space-y-3">
+          {created && (
+            <Card className="p-5 border-emerald-300 bg-emerald-50/50 pop">
+              <div className="flex gap-5 items-center">
+                <QR text={created.code} size={110} />
+                <div className="flex-1">
+                  <div className="text-emerald-700 font-bold mb-1">✓ 招待を作成しました</div>
+                  <div className="text-sm text-slate-600">
+                    {created.visitorName} 様 / {created.date} {created.time} / {created.room}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">受付コード: {created.code}</div>
+                  <div className="text-xs text-slate-500 mt-2">📅 カレンダー登録 & 会議室予約 完了（デモ）</div>
+                  <button onClick={() => { sendEmail(created); setCreated(null); }}
+                    className="mt-3 px-4 py-2 rounded-lg bg-[#1a73e8] text-white text-sm font-medium">
+                    ✉️ 招待メールを送信（QR添付）
+                  </button>
+                </div>
+              </div>
+            </Card>
+          )}
+          {db.invitations.map((i) => (
+            <Card key={i.id} className="p-4 flex items-center gap-4">
+              <QR text={i.code} size={70} />
+              <div className="flex-1">
+                <div className="font-semibold text-slate-800">{i.visitorName} 様
+                  {i.used && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-500">受付済</span>}
+                </div>
+                <div className="text-xs text-slate-500">{i.company} ／ 担当: {i.host || "—"}</div>
+                <div className="text-xs text-slate-400">{i.date} {i.time} ／ {i.room} ／ {i.code}</div>
+              </div>
+              <div className="flex flex-col gap-2">
+                {i.emailSent
+                  ? <span className="text-xs text-emerald-600">✓ 送信済</span>
+                  : <button onClick={() => sendEmail(i)} className="text-xs px-3 py-1 rounded-full bg-[#1a73e8] text-white">メール送信</button>}
+                <button onClick={() => remove(i.id)} className="text-xs text-slate-400 hover:text-red-500">削除</button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+function Field({ label, value, onChange, type = "text" }) {
+  return (
+    <div>
+      <label className="text-slate-500">{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)}
+        className="w-full mt-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-sky-400" />
+    </div>
+  );
+}
+
+function Settings({ db, setDB }) {
+  const s = db.settings;
+  const set = (patch) => setDB({ ...db, settings: { ...s, ...patch } });
+  const [roomInput, setRoomInput] = useState("");
+  return (
+    <div className="max-w-2xl">
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">設定</h1>
+      <Card className="p-6 mb-5 space-y-4">
+        <h2 className="font-bold text-slate-700">待ち受け画面テーマ</h2>
+        <div className="grid grid-cols-5 gap-3">
+          {THEME_ORDER.map(k => {
+            const t = THEMES[k];
+            const active = (s.bgTheme || "obsidian") === k;
+            return (
+              <button key={k} onClick={() => set({ bgTheme: k })}
+                className={"rounded-xl overflow-hidden border-2 transition " + (active ? "border-slate-800 ring-2 ring-slate-400" : "border-slate-200 hover:border-slate-400")}>
+                <div className="h-16 w-full" style={{ background: t.bg }} />
+                <div className={"text-xs py-1.5 text-center font-medium " + (active ? "bg-slate-800 text-white" : "bg-slate-50 text-slate-600")}>
+                  {t.label}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+      <Card className="p-6 mb-5 space-y-4">
+        <h2 className="font-bold text-slate-700">基本情報・待ち受け画面</h2>
+        <Field label="会社名" value={s.companyName} onChange={(v) => set({ companyName: v })} />
+        <Field label="タグライン（ロゴ下）" value={s.tagline} onChange={(v) => set({ tagline: v })} />
+      </Card>
+      <Card className="p-6 mb-5 space-y-4">
+        <h2 className="font-bold text-slate-700">受付時間</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="開始" type="time" value={s.openTime} onChange={(v) => set({ openTime: v })} />
+          <Field label="終了" type="time" value={s.closeTime} onChange={(v) => set({ closeTime: v })} />
+        </div>
+        <p className="text-xs text-slate-400">時間外は待ち受けに「ただいま営業時間外です」を表示します。</p>
+      </Card>
+      <Card className="p-6 mb-5 space-y-3">
+        <h2 className="font-bold text-slate-700">受付完了画面の表示（プライバシー）</h2>
+        <div className="space-y-2">
+          {[
+            ["name", "氏名のみ表示", "「いらっしゃいませ ○○様」　※推奨"],
+            ["full", "会社名＋氏名を表示", "「いらっしゃいませ XX株式会社 ○○様」"],
+            ["generic", "汎用文のみ", "「ようこそお越しくださいました」（氏名を出さない）"],
+          ].map(([val, label, desc]) => (
+            <label key={val} className={"flex items-start gap-3 p-3 rounded-lg border cursor-pointer " +
+              ((s.greetingMode || "name") === val ? "border-sky-400 bg-sky-50" : "border-slate-200")}>
+              <input type="radio" name="greet" checked={(s.greetingMode || "name") === val}
+                onChange={() => set({ greetingMode: val })} className="mt-1" />
+              <div>
+                <div className="text-sm font-medium text-slate-800">{label}</div>
+                <div className="text-xs text-slate-500">{desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400">
+          受付端末は人目に触れる場所に置かれるため、会社名の表示は来訪事実が第三者に見える点に注意。既定は氏名のみ。
+        </p>
+      </Card>
+      <Card className="p-6 mb-5 space-y-4">
+        <h2 className="font-bold text-slate-700">Google Chat 通知</h2>
+        <Field label="Incoming Webhook URL" value={s.chatWebhook} onChange={(v) => set({ chatWebhook: v })} />
+        <p className="text-xs text-slate-400">受付・退館時にこのWebhookへ通知を送信します。</p>
+      </Card>
+      <Card className="p-6 space-y-3">
+        <h2 className="font-bold text-slate-700">会議室</h2>
+        <div className="flex flex-wrap gap-2">
+          {s.rooms.map((r) => (
+            <span key={r} className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-sm flex items-center gap-2">
+              {r}
+              <button onClick={() => set({ rooms: s.rooms.filter((x) => x !== r) })} className="text-slate-400 hover:text-red-500">×</button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input value={roomInput} onChange={(e) => setRoomInput(e.target.value)} placeholder="会議室名を追加"
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-sky-400 text-sm" />
+          <button onClick={() => { if (roomInput.trim()) { set({ rooms: [...s.rooms, roomInput.trim()] }); setRoomInput(""); } }}
+            className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm">追加</button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* ============================ ルート ============================ */
+function App() {
+  const [db, setDBState] = useState(loadDB());
+  const [view, setView] = useState("kiosk"); // kiosk | admin
+  const [toast, setToast] = useState(null);
+  const [forceClosed, setForceClosed] = useState(false);
+
+  const setDB = (next) => { setDBState(next); saveDB(next); };
+  const notify = (msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); };
+  const reset = () => { localStorage.removeItem(DB_KEY); const d = loadDB(); setDBState(d); };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* デモ用ツールバー */}
+      <div className="bg-slate-950 text-white px-5 py-3 flex items-center gap-4 flex-wrap">
+        <span className="font-bold text-sky-400">受付システム ホットモック</span>
+        <div className="flex rounded-lg overflow-hidden border border-white/20">
+          <button onClick={() => setView("kiosk")}
+            className={"px-4 py-1.5 text-sm " + (view === "kiosk" ? "bg-sky-500" : "bg-transparent")}>📱 受付端末</button>
+          <button onClick={() => setView("admin")}
+            className={"px-4 py-1.5 text-sm " + (view === "admin" ? "bg-sky-500" : "bg-transparent")}>🖥 管理画面</button>
+        </div>
+        {view === "kiosk" && (
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={forceClosed} onChange={(e) => setForceClosed(e.target.checked)} />
+            営業時間外をシミュレート
+          </label>
+        )}
+        <button onClick={reset} className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
+          🔄 デモデータをリセット
+        </button>
+      </div>
+
+      {/* 本体 */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        {view === "kiosk" ? (
+          <div className="ipad-frame bg-black p-3 w-[900px] max-w-full">
+            <div className="rounded-[26px] overflow-hidden h-[640px] relative">
+              <Kiosk db={db} setDB={setDB} notify={notify} forceClosed={forceClosed} />
+            </div>
+          </div>
+        ) : (
+          <div className="w-full max-w-6xl h-[680px] rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
+            <Admin db={db} setDB={setDB} notify={notify} />
+          </div>
+        )}
+      </div>
+
+      <ChatToast toast={toast} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
