@@ -622,14 +622,28 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
             <span>👆</span>
             <span className={th.btn.shine}>画面をタップして受付を開始</span>
           </div>
-          {/* 音声受付ボタン */}
-          {getApiKey() && (
-            <button onClick={e => { e.stopPropagation(); setVoiceStep("idle"); setScreen("voice"); }}
-              className="fadeup-4 mt-5 flex items-center gap-2 px-5 py-2 rounded-full bg-white/8 border border-white/15 text-white/60 text-sm hover:bg-white/15 hover:text-white/90 transition">
-              🎤 <span>音声で受付する</span>
-            </button>
-          )}
-          <div className={"fadeup-4 text-xs mt-4 " + th.footer}>RECEPTION · ユリーカ</div>
+          {getApiKey() ? (
+            <>
+              {/* 区切り */}
+              <div className="fadeup-4 flex items-center gap-3 mt-5 w-72">
+                <span className="flex-1 h-px bg-white/15" />
+                <span className="text-white/35 text-xs tracking-widest">または</span>
+                <span className="flex-1 h-px bg-white/15" />
+              </div>
+              {/* 音声受付ボタン */}
+              <button onClick={e => { e.stopPropagation(); setVoiceStep("idle"); setScreen("voice"); }}
+                className="fadeup-4 mt-4 flex items-center gap-3 px-8 py-4 rounded-full text-base font-semibold text-white transition active:scale-95"
+                style={{ background: "linear-gradient(to right, #7c3aed, #a855f7)", boxShadow: "0 0 28px rgba(139,92,246,.5), 0 8px 20px rgba(0,0,0,.3)" }}>
+                <span className="relative flex h-6 w-6 items-center justify-center">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-white/30 animate-ping" />
+                  <span className="relative text-lg">🎤</span>
+                </span>
+                音声で受付する
+                <span className="text-xs px-1.5 py-0.5 rounded bg-white/20 font-normal tracking-wider">AI</span>
+              </button>
+            </>
+          ) : null}
+          <div className={"fadeup-4 text-xs mt-5 " + th.footer}>RECEPTION · ユリーカ</div>
         </div>
       </KioskShell>
     );
