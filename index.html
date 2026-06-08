@@ -340,10 +340,11 @@ async function loadFromSupabase() {
 async function syncToSupabase(next, prev) {
   if (!prev) return;
 
-  // 新規来訪ログ
+  // 新規来訪ログ（UUID を明示的に渡すことで Chat カードと紐付く）
   const newLogs = next.logs.filter(l => !prev.logs.find(p => p.id === l.id));
   for (const log of newLogs) {
     await sb.from("reception_visits").insert({
+      id:           log.id,   // crypto.randomUUID() で生成した UUID
       visitor_name: log.name,
       company_name: log.company || null,
       visit_type:   log.type || "walkin",
@@ -395,6 +396,19 @@ async function syncToSupabase(next, prev) {
     for (const row of rows) {
       await sb.from("reception_settings").upsert(row, { onConflict: "key" });
     }
+  }
+}
+
+/* ---- Google Chat カード送信 ---- */
+async function sendChatCard(info) {
+  try {
+    await fetch("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(info),
+    });
+  } catch (e) {
+    console.warn("Chat通知送信失敗（続行します）:", e);
   }
 }
 
@@ -566,49 +580,61 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return { jp: "こんばんは", en: "GOOD EVENING" };
   };
 
+  // UUIDを返す（Supabase連携 & Chat通知で使用）
   const addLog = (entry) => {
-    const next = { ...db, logs: [{ id: uid(), ts: nowISO(), action: "入館", ...entry }, ...db.logs] };
+    const visitId = crypto.randomUUID();
+    const next = { ...db, logs: [{ id: visitId, ts: nowISO(), action: "入館", ...entry }, ...db.logs] };
     setDB(next);
+    return visitId;
   };
 
-  const goDone = (msg, chatMsg) => {
+  // chatCardInfo があれば Google Chat にも通知
+  const goDone = (msg, chatMsg, chatCardInfo) => {
     setDoneMsg(msg);
     setScreen("done");
     notify(chatMsg);
+    if (chatCardInfo) sendChatCard(chatCardInfo); // 非同期・失敗しても続行
     setTimeout(() => setScreen("standby"), 4500);
   };
 
   const handleDelivery = () => {
-    addLog({ name: "配送業者", company: "", type: "delivery", host: "" });
+    const time = fmtTime(nowISO());
+    const visitId = addLog({ name: "配送業者", company: "", type: "delivery", host: "" });
     goDone(
       "受付ありがとうございます。\n担当者がまいりますので少々お待ちください。",
-      "📦 配送業者が受付に到着しました\n受付時刻: " + fmtTime(nowISO())
+      "📦 配送業者が受付に到着しました\n受付時刻: " + time,
+      { visitId, visitorName: "配送業者", company: "", host: "", room: "", time, isDelivery: true }
     );
   };
 
   const handleQRScan = (inv) => {
     setPickerOpen(false);
+    const visitId = crypto.randomUUID();
+    const time = fmtTime(nowISO());
     const next = {
       ...db,
       invitations: db.invitations.map((i) => i.id === inv.id ? { ...i, used: true } : i),
-      logs: [{ id: uid(), ts: nowISO(), action: "入館", name: inv.visitorName, company: inv.company,
+      logs: [{ id: visitId, ts: nowISO(), action: "入館", name: inv.visitorName, company: inv.company,
                type: "visitor", host: inv.host }, ...db.logs],
     };
     setDB(next);
     goDone(
       welcomeMsg(inv.company, inv.visitorName),
       "🙋 来訪者が受付に到着しました\n氏名: " + inv.visitorName + "（" + inv.company + "）\n担当: " +
-      inv.host + " さん\n会議室: " + (inv.room || "未設定") + "\n受付時刻: " + fmtTime(nowISO())
+      inv.host + " さん\n会議室: " + (inv.room || "未設定") + "\n受付時刻: " + time,
+      { visitId, visitorName: inv.visitorName, company: inv.company, host: inv.host, room: inv.room || "", time }
     );
   };
 
   const handleKeyboard = () => {
     if (!nameInput.trim()) return;
-    addLog({ name: nameInput.trim(), company: companyInput.trim(), type: "visitor", host: "（受付入力）" });
+    const time = fmtTime(nowISO());
+    const visitId = addLog({ name: nameInput.trim(), company: companyInput.trim(), type: "visitor", host: "（受付入力）" });
     goDone(
       nameInput.trim() + " 様、ようこそお越しくださいました。\n担当者へお取り次ぎいたします。",
       "🙋 来訪者が受付に到着しました（キーボード入力）\n氏名: " + nameInput.trim() +
-      (companyInput.trim() ? "（" + companyInput.trim() + "）" : "") + "\n受付時刻: " + fmtTime(nowISO())
+      (companyInput.trim() ? "（" + companyInput.trim() + "）" : "") + "\n受付時刻: " + time,
+      { visitId, visitorName: nameInput.trim(), company: companyInput.trim(), host: "（受付入力）", room: "", time }
     );
     setNameInput(""); setCompanyInput("");
   };
@@ -630,11 +656,13 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
   };
   const handleCard = () => {
     if (!cardName.trim()) return;
-    addLog({ name: cardName.trim(), company: cardCompany.trim(), type: "visitor", host: "（名刺受付）" });
+    const time = fmtTime(nowISO());
+    const visitId = addLog({ name: cardName.trim(), company: cardCompany.trim(), type: "visitor", host: "（名刺受付）" });
     goDone(
       welcomeMsg(cardCompany.trim(), cardName.trim()),
       "🙋 来訪者が受付に到着しました（名刺受付）\n氏名: " + cardName.trim() +
-      (cardCompany.trim() ? "（" + cardCompany.trim() + "）" : "") + "\n受付時刻: " + fmtTime(nowISO())
+      (cardCompany.trim() ? "（" + cardCompany.trim() + "）" : "") + "\n受付時刻: " + time,
+      { visitId, visitorName: cardName.trim(), company: cardCompany.trim(), host: "（名刺受付）", room: "", time }
     );
     setCardName(""); setCardCompany("");
   };
@@ -709,13 +737,16 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
   const handleVoiceConfirm = () => {
     if (!voiceResult.visitorName) return;
-    addLog({ name: voiceResult.visitorName, company: voiceResult.company,
-             type: "visitor", host: voiceResult.host || "（音声受付）" });
+    const time = fmtTime(nowISO());
+    const visitId = addLog({ name: voiceResult.visitorName, company: voiceResult.company,
+                             type: "voice", host: voiceResult.host || "（音声受付）" });
     goDone(
       welcomeMsg(voiceResult.company, voiceResult.visitorName),
       "🎤 来訪者が音声で受付しました\n氏名: " + voiceResult.visitorName +
       (voiceResult.company ? "（" + voiceResult.company + "）" : "") +
-      "\n受付時刻: " + fmtTime(nowISO())
+      "\n受付時刻: " + time,
+      { visitId, visitorName: voiceResult.visitorName, company: voiceResult.company,
+        host: voiceResult.host || "（音声受付）", room: "", time }
     );
     setVoiceStep("idle");
   };

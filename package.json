@@ -1,0 +1,9 @@
+{
+  "name": "reception-system",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.0",
+    "google-auth-library": "^9.15.0"
+  }
+}
