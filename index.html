@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   html, body { height: 100%; }
   body {
@@ -221,7 +222,12 @@ function Logo({ width = 300 }) {
     style={{ width: width + "px", height: "auto", display: "block" }} />;
 }
 
-/* ============================ モックDB (localStorage) ============================ */
+/* ============================ Supabase クライアント ============================ */
+const SUPABASE_URL  = "https://euseplsiazfwdirgbmwj.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1c2VwbHNpYXpmd2RpcmdibXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4ODY0MjAsImV4cCI6MjA5NjQ2MjQyMH0.qmqiZiYfPXCKNwC81rvh-ESZK4Wh7K92AVkPxUotRe4";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+/* ============================ DB (Supabase + localStorage fallback) ============================ */
 const DB_KEY = "reception_mock_v3";
 
 const DEFAULT_BUSINESS_HOURS = [
@@ -238,6 +244,171 @@ const DEFAULT_BUTTONS = [
   { id: "delivery", label: "配送業者の方",   sub: "ボタンひとつで担当者を呼び出します", emoji: "📦", color: "from-amber-400 to-orange-500", type: "delivery" },
   { id: "visitor",  label: "ご予約・招待の方", sub: "QRコード または お名前で受付",       emoji: "🤝", color: "from-sky-400 to-indigo-500",   type: "visitor" },
 ];
+
+/* ---- Supabase ↔ アプリ 型変換 ---- */
+const COLOR_TO_GRADIENT = {
+  blue:   "from-sky-400 to-indigo-500",
+  orange: "from-amber-400 to-orange-500",
+  green:  "from-emerald-400 to-teal-500",
+  violet: "from-violet-400 to-purple-500",
+  red:    "from-rose-400 to-red-500",
+  slate:  "from-slate-500 to-slate-700",
+};
+const GRADIENT_TO_COLOR = Object.fromEntries(
+  Object.entries(COLOR_TO_GRADIENT).map(([k, v]) => [v, k])
+);
+
+function normalizeBH(raw) {
+  // Supabaseのシード形式 {day:0, label:"月", open:true, start:"09:00", end:"18:00"}
+  // アプリ形式 {day:"月", enabled:true, open:"09:00", close:"18:00"}
+  if (!Array.isArray(raw)) return DEFAULT_BUSINESS_HOURS;
+  if (raw[0] && typeof raw[0].enabled !== "undefined") return raw; // already app format
+  return raw.map(r => ({
+    day:     r.label || String(r.day),
+    enabled: r.open !== false,
+    open:    r.start || "09:00",
+    close:   r.end   || "18:00",
+  }));
+}
+
+/* ---- Supabase からロード ---- */
+async function loadFromSupabase() {
+  const [setRes, roomRes, btnRes, invRes, visitRes] = await Promise.all([
+    sb.from("reception_settings").select("key,value"),
+    sb.from("reception_rooms").select("*").eq("is_active", true).order("sort_order"),
+    sb.from("reception_buttons").select("*").eq("is_active", true).order("sort_order"),
+    sb.from("reception_invitations").select("*").order("visit_date", { ascending: true }),
+    sb.from("reception_visits").select("*").order("checked_in_at", { ascending: false }).limit(300),
+  ]);
+
+  const kv = {};
+  (setRes.data || []).forEach(r => { kv[r.key] = r.value; });
+
+  const rooms = (roomRes.data || []).map(r => r.name);
+
+  const receptionButtons = (btnRes.data || []).map(b => ({
+    id:    b.id,
+    label: b.label,
+    emoji: b.emoji || "",
+    color: COLOR_TO_GRADIENT[b.color] || BTN_COLORS[0].val,
+    type:  b.type,
+    sub:   b.type === "delivery" ? "ボタンひとつで担当者を呼び出します" : "QRコード または お名前で受付",
+  }));
+
+  const invitations = (invRes.data || []).map(i => ({
+    id:          i.id,
+    code:        i.qr_token,
+    visitorName: i.visitor_name,
+    company:     i.company_name || "",
+    host:        i.host_name,
+    date:        i.visit_date,
+    time:        i.visit_time ? i.visit_time.slice(0, 5) : "",
+    room:        "",
+    emailSent:   i.send_method === "email",
+    used:        i.status === "arrived",
+    status:      i.status,
+  }));
+
+  const logs = (visitRes.data || []).map(v => ({
+    id:      v.id,
+    name:    v.visitor_name,
+    company: v.company_name || "",
+    type:    v.visit_type,
+    host:    v.host_name || "",
+    action:  v.checked_out_at ? "退館" : "入館",
+    ts:      v.checked_in_at,
+  }));
+
+  return {
+    settings: {
+      companyName:       kv["company_name"] || "株式会社ユリーカ",
+      tagline:           "SIMPLEVOLUTION.",
+      businessHours:     normalizeBH(kv["business_hours"]),
+      receptionButtons:  receptionButtons.length ? receptionButtons : DEFAULT_BUTTONS,
+      greetingMode:      "name",
+      bgTheme:           kv["theme"] || "midnight",
+      afterHoursReception: kv["allow_outside_hours"] === true || kv["allow_outside_hours"] === "true",
+      chatWebhook:       kv["google_chat_webhook"] || "",
+      rooms:             rooms.length ? rooms : ["会議室A", "会議室B", "応接室"],
+    },
+    invitations,
+    logs,
+  };
+}
+
+/* ---- Supabase への差分同期 ---- */
+async function syncToSupabase(next, prev) {
+  if (!prev) return;
+
+  // 新規来訪ログ
+  const newLogs = next.logs.filter(l => !prev.logs.find(p => p.id === l.id));
+  for (const log of newLogs) {
+    await sb.from("reception_visits").insert({
+      visitor_name: log.name,
+      company_name: log.company || null,
+      visit_type:   log.type || "walkin",
+      host_name:    log.host || null,
+      checked_in_at: log.ts || new Date().toISOString(),
+    });
+  }
+
+  // 新規招待
+  const newInvs = next.invitations.filter(i => !prev.invitations.find(p => p.id === i.id));
+  for (const inv of newInvs) {
+    const { data } = await sb.from("reception_invitations").insert({
+      visitor_name: inv.visitorName,
+      company_name: inv.company || null,
+      host_name:    inv.host,
+      visit_date:   inv.date,
+      visit_time:   inv.time || null,
+      send_method:  inv.emailSent ? "email" : "unsent",
+    }).select("id,qr_token").single();
+    // DBが採番したIDで上書き
+    if (data) {
+      inv.id   = data.id;
+      inv.code = data.qr_token;
+    }
+  }
+
+  // 招待ステータス変更（QRスキャンで used=true）
+  const updInvs = next.invitations.filter(i => {
+    const p = prev.invitations.find(p => p.id === i.id);
+    return p && p.used !== i.used;
+  });
+  for (const inv of updInvs) {
+    await sb.from("reception_invitations").update({
+      status:     inv.used ? "arrived" : "pending",
+      arrived_at: inv.used ? new Date().toISOString() : null,
+    }).eq("id", inv.id);
+  }
+
+  // 設定変更
+  if (JSON.stringify(next.settings) !== JSON.stringify(prev.settings)) {
+    const s = next.settings;
+    const rows = [
+      { key: "company_name",         value: s.companyName },
+      { key: "theme",                value: s.bgTheme },
+      { key: "allow_outside_hours",  value: s.afterHoursReception },
+      { key: "business_hours",       value: s.businessHours },
+      { key: "google_chat_webhook",  value: s.chatWebhook || null },
+    ];
+    for (const row of rows) {
+      await sb.from("reception_settings").upsert(row, { onConflict: "key" });
+    }
+  }
+}
+
+/* ---- localStorage フォールバック ---- */
+function loadLocalDB() {
+  try {
+    const raw = localStorage.getItem(DB_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  const d = defaultDB();
+  localStorage.setItem(DB_KEY, JSON.stringify(d));
+  return d;
+}
+function saveLocalDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 
 const BTN_COLORS = [
   { label: "アンバー",  val: "from-amber-400 to-orange-500" },
@@ -276,16 +447,7 @@ const defaultDB = () => ({
   ],
 });
 
-function loadDB() {
-  try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  const d = defaultDB();
-  localStorage.setItem(DB_KEY, JSON.stringify(d));
-  return d;
-}
-function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+/* loadDB / saveDB は後方互換のため残す（旧コード参照箇所なし） */
 
 /* ============================ ユーティリティ ============================ */
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -1746,16 +1908,59 @@ function Settings({ db, setDB }) {
   );
 }
 
+/* ============================ ローディング画面 ============================ */
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
+      <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+      <p className="text-slate-400 text-sm tracking-widest">Supabase 接続中...</p>
+    </div>
+  );
+}
+
 /* ============================ ルート ============================ */
 function App() {
-  const [db, setDBState] = useState(loadDB());
+  const [db, setDBState] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState("kiosk"); // kiosk | admin
   const [toast, setToast] = useState(null);
   const [forceClosed, setForceClosed] = useState(false);
+  const prevDBRef = useRef(null);
 
-  const setDB = (next) => { setDBState(next); saveDB(next); };
+  // Supabase からデータをロード
+  useEffect(() => {
+    loadFromSupabase()
+      .then(data => {
+        setDBState(data);
+        saveLocalDB(data);
+        prevDBRef.current = data;
+      })
+      .catch(err => {
+        console.warn("Supabase 接続失敗、localStorageを使用します:", err);
+        const d = loadLocalDB();
+        setDBState(d);
+        prevDBRef.current = d;
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const setDB = (next) => {
+    setDBState(next);
+    saveLocalDB(next); // ローカルに即保存
+    const prev = prevDBRef.current;
+    prevDBRef.current = next;
+    syncToSupabase(next, prev).catch(console.error); // Supabaseへ非同期同期
+  };
   const notify = (msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); };
-  const reset = () => { localStorage.removeItem(DB_KEY); const d = loadDB(); setDBState(d); };
+  const reset = () => {
+    setLoading(true);
+    loadFromSupabase()
+      .then(data => { setDBState(data); saveLocalDB(data); prevDBRef.current = data; })
+      .catch(() => { const d = loadLocalDB(); setDBState(d); prevDBRef.current = d; })
+      .finally(() => setLoading(false));
+  };
+
+  if (loading || !db) return <LoadingScreen />;
 
   return (
     <div className="min-h-screen flex flex-col">
