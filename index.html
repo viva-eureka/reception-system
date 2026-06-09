@@ -1397,7 +1397,7 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return (
       <KioskShell>
         <Header title="名刺を撮影してください" onBack={() => { setScreen("visitor"); setCardStep("camera"); setCardImageDataURL(null); }} />
-        <div className="flex-1 p-8 flex flex-col items-center justify-center">
+        <div className="flex-1 p-8 flex flex-col items-center overflow-y-auto" style={{ justifyContent: cardStep === "review" ? "flex-start" : "center" }}>
           {cardStep === "camera" && (
             <CardCamera onCapture={handleCardCapture} />
           )}
