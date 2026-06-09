@@ -1723,20 +1723,19 @@ function RoomsDashboard({ db }) {
         </div>
       </div>
 
-      {/* 今すぐ使える */}
-      <div className="flex gap-3 mb-6">
+      {/* 今すぐ使える — グリッド */}
+      <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
         {rooms.map(r => {
           const free = !isBusy(r, nowH);
           return (
-            <div key={r} className={"flex-1 rounded-2xl p-4 border-2 " +
-              (free ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-slate-50")}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className={"w-2.5 h-2.5 rounded-full " + (free ? "bg-emerald-500" : "bg-slate-300")} />
-                <span className="font-semibold text-slate-800">{r}</span>
+            <div key={r} className={"rounded-xl p-3 border " +
+              (free ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
+              <div className={"inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full mb-2 " +
+                (free ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600")}>
+                <span className={"w-1.5 h-1.5 rounded-full " + (free ? "bg-emerald-500" : "bg-rose-500")} />
+                {free ? "空き" : "使用中"}
               </div>
-              <div className={"text-sm font-medium " + (free ? "text-emerald-600" : "text-slate-400")}>
-                {free ? "✅ 今すぐ使えます" : "❌ 使用中"}
-              </div>
+              <div className="text-sm font-semibold text-slate-800 leading-snug break-all">{r}</div>
             </div>
           );
         })}
@@ -1749,7 +1748,7 @@ function RoomsDashboard({ db }) {
         </div>
         <div className="min-w-[600px]">
           {/* 時刻ヘッダー */}
-          <div className="flex mb-2 pl-24">
+          <div className="flex mb-2 pl-36">
             {DISPLAY_HOURS.map(h => (
               <div key={h} className="flex-1 text-xs text-slate-400 text-center">{h}</div>
             ))}
@@ -1757,7 +1756,7 @@ function RoomsDashboard({ db }) {
           {/* 各部屋 */}
           {rooms.map(room => (
             <div key={room} className="flex items-center mb-3 gap-2">
-              <div className="w-20 text-sm font-medium text-slate-700 shrink-0 text-right pr-3">{room}</div>
+              <div className="w-32 text-xs font-medium text-slate-700 shrink-0 text-right pr-3 leading-snug">{room}</div>
               <div className="flex-1 flex h-9 rounded-lg overflow-hidden relative border border-slate-200">
                 {DISPLAY_HOURS.map(h => {
                   const busy = isBusy(room, h);
