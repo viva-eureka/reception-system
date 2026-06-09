@@ -274,18 +274,37 @@ function normalizeBH(raw) {
 
 /* ---- Supabase からロード ---- */
 async function loadFromSupabase() {
-  const [setRes, roomRes, btnRes, invRes, visitRes] = await Promise.all([
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [setRes, roomRes, btnRes, invRes, visitRes, availRes] = await Promise.all([
     sb.from("reception_settings").select("key,value"),
     sb.from("reception_rooms").select("*").eq("is_active", true).order("sort_order"),
     sb.from("reception_buttons").select("*").eq("is_active", true).order("sort_order"),
     sb.from("reception_invitations").select("*").order("visit_date", { ascending: true }),
     sb.from("reception_visits").select("*").order("checked_in_at", { ascending: false }).limit(300),
+    sb.from("reception_room_availability").select("*").eq("date", todayStr),
   ]);
 
   const kv = {};
   (setRes.data || []).forEach(r => { kv[r.key] = r.value; });
 
-  const rooms = (roomRes.data || []).map(r => r.name);
+  const roomList = roomRes.data || [];
+  const rooms = roomList.map(r => r.name);
+
+  // calendar_id → events のマップを作り、room名でも引けるようにする
+  const availByCalId = {};
+  (availRes.data || []).forEach(a => { availByCalId[a.calendar_id] = a.events || []; });
+  const roomAvailability = {};  // { "会議室名": [{title,start,end}, ...] }
+  let availSyncedAt = null;
+  roomList.forEach(r => {
+    if (r.calendar_id && availByCalId[r.calendar_id]) {
+      roomAvailability[r.name] = availByCalId[r.calendar_id];
+    }
+  });
+  const availRows = availRes.data || [];
+  if (availRows.length) {
+    availSyncedAt = availRows.reduce((latest, a) =>
+      !latest || a.synced_at > latest ? a.synced_at : latest, null);
+  }
 
   const receptionButtons = (btnRes.data || []).map(b => ({
     id:    b.id,
@@ -335,6 +354,8 @@ async function loadFromSupabase() {
     },
     invitations,
     logs,
+    roomAvailability,   // { "部屋名": [{title,start,end},...] }
+    availSyncedAt,      // 最終同期日時
   };
 }
 
@@ -1685,15 +1706,13 @@ function Logs({ db, setDB, notify }) {
   );
 }
 
-/* ---- 会議室空き状況ヘルパー（デモ用シミュレート） ---- */
-const DEMO_BOOKINGS = [
-  { room: "会議室A", start: 10, end: 11.5 },
-  { room: "会議室A", start: 14, end: 15 },
-  { room: "会議室B", start: 13, end: 14.5 },
-  { room: "会議室B", start: 16, end: 17 },
-  { room: "応接室",  start: 11, end: 12 },
-  { room: "応接室",  start: 15, end: 16.5 },
-];
+/* ---- 会議室空き状況ヘルパー ---- */
+// "HH:mm" → 時刻の小数表現 (例: "09:30" → 9.5)
+function timeToH(str) {
+  if (!str) return 0;
+  const [h, m] = str.split(":").map(Number);
+  return h + (m || 0) / 60;
+}
 
 // 指定日時に空いているか（デモ用）
 function isRoomFree(room, date, timeStr) {
@@ -1703,23 +1722,39 @@ function isRoomFree(room, date, timeStr) {
 }
 
 function RoomsDashboard({ db }) {
-  const [clock] = useState(new Date());
+  const [clock, setClock] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setClock(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
   const nowH = clock.getHours() + clock.getMinutes() / 60;
-  const HOURS = Array.from({ length: 19 }, (_, i) => i + 8); // 8〜26(=翌2)
-  const DISPLAY_HOURS = HOURS.filter(h => h <= 20);
-  const rooms = db.settings.rooms || ["会議室A", "会議室B", "応接室"];
+  const DISPLAY_HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8〜20
+  const rooms = db.settings.rooms || [];
+  const avail = db.roomAvailability || {};
+  const syncedAt = db.availSyncedAt;
+  const hasAvailData = Object.keys(avail).length > 0;
 
+  // h 時台にその部屋が使用中かチェック
   const isBusy = (room, h) =>
-    DEMO_BOOKINGS.some(b => b.room === room && h >= b.start && h < b.end);
+    (avail[room] || []).some(ev => h >= timeToH(ev.start) && h < timeToH(ev.end));
 
-  const currentFree = rooms.filter(r => !isBusy(r, nowH));
+  // ツールチップ用: h 時台に重なる予定タイトルを返す
+  const getEvent = (room, h) =>
+    (avail[room] || []).find(ev => h >= timeToH(ev.start) && h < timeToH(ev.end));
+
+  const fmtSync = syncedAt
+    ? new Date(syncedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-bold text-slate-800">会議室</h1>
-        <div className="text-xs text-slate-400">
-          ※ 本番はGoogle Calendar freebusy APIから取得。個人カレンダーは参照しません。
+        <div className="text-right">
+          {fmtSync
+            ? <div className="text-xs text-slate-400">📡 最終同期: {fmtSync}</div>
+            : <div className="text-xs text-amber-500">⚠️ 同期データなし — Apps Scriptで syncRoomAvailability を実行してください</div>
+          }
         </div>
       </div>
 
@@ -1727,6 +1762,12 @@ function RoomsDashboard({ db }) {
       <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
         {rooms.map(r => {
           const free = !isBusy(r, nowH);
+          const events = avail[r] || [];
+          // 次の予定を探す（現在時刻以降の最初の予定）
+          const next = events
+            .filter(ev => timeToH(ev.start) > nowH)
+            .sort((a, b) => timeToH(a.start) - timeToH(b.start))[0];
+          const currentEv = events.find(ev => nowH >= timeToH(ev.start) && nowH < timeToH(ev.end));
           return (
             <div key={r} className={"rounded-xl p-3 border " +
               (free ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50")}>
@@ -1735,16 +1776,39 @@ function RoomsDashboard({ db }) {
                 <span className={"w-1.5 h-1.5 rounded-full " + (free ? "bg-emerald-500" : "bg-rose-500")} />
                 {free ? "空き" : "使用中"}
               </div>
-              <div className="text-sm font-semibold text-slate-800 leading-snug break-all">{r}</div>
+              <div className="text-sm font-semibold text-slate-800 leading-snug break-all mb-1">{r}</div>
+              {!free && currentEv && (
+                <div className="text-xs text-rose-500 truncate" title={currentEv.title}>
+                  {currentEv.start}〜{currentEv.end}
+                </div>
+              )}
+              {free && next && (
+                <div className="text-xs text-slate-400">次: {next.start}〜</div>
+              )}
+              {!hasAvailData && (
+                <div className="text-xs text-slate-300 mt-1">データなし</div>
+              )}
             </div>
           );
         })}
+        {rooms.length === 0 && (
+          <p className="text-sm text-slate-400 col-span-full py-4">
+            会議室が登録されていません。設定画面から同期してください。
+          </p>
+        )}
       </div>
 
       {/* タイムライン */}
       <Card className="p-6 overflow-x-auto">
-        <div className="text-sm font-bold text-slate-700 mb-4">
-          本日のスケジュール（{clock.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}）
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm font-bold text-slate-700">
+            本日のスケジュール（{clock.toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}）
+          </div>
+          {!hasAvailData && (
+            <div className="text-xs text-amber-500 bg-amber-50 px-2 py-1 rounded-lg">
+              設定 → Googleカレンダー連携 → syncRoomAvailability を実行してください
+            </div>
+          )}
         </div>
         <div className="min-w-[600px]">
           {/* 時刻ヘッダー */}
@@ -1761,11 +1825,13 @@ function RoomsDashboard({ db }) {
                 {DISPLAY_HOURS.map(h => {
                   const busy = isBusy(room, h);
                   const isNow = Math.floor(nowH) === h;
+                  const ev = busy ? getEvent(room, h) : null;
                   return (
-                    <div key={h} className={"flex-1 relative " +
-                      (busy ? "bg-red-100" : "bg-emerald-50") +
-                      (isNow ? " ring-2 ring-inset ring-sky-400" : "")}>
-                      {busy && <div className="absolute inset-1 rounded bg-red-300/60" />}
+                    <div key={h} title={ev ? `${ev.start}〜${ev.end} ${ev.title || ""}` : ""}
+                      className={"flex-1 relative " +
+                        (busy ? "bg-rose-100" : "bg-emerald-50") +
+                        (isNow ? " ring-2 ring-inset ring-sky-400" : "")}>
+                      {busy && <div className="absolute inset-1 rounded bg-rose-300/60" />}
                     </div>
                   );
                 })}
@@ -1780,7 +1846,7 @@ function RoomsDashboard({ db }) {
           {/* 凡例 */}
           <div className="flex gap-4 mt-2 text-xs text-slate-400">
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-100 inline-block border border-slate-200" />空き</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 inline-block" />予約あり</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-rose-200 inline-block" />予約あり（ホバーで詳細）</span>
             <span className="flex items-center gap-1"><span className="w-0.5 h-3 bg-sky-500 inline-block" />現在時刻</span>
           </div>
         </div>
@@ -2679,10 +2745,12 @@ function Settings({ db, setDB }) {
               <li>左側の時計アイコン「トリガー」→「＋トリガーを追加」を開く<br/><span className="text-amber-600">※ 保存前に開くと関数一覧が読み込まれないため、必ず保存後に開くこと</span></li>
               <li>関数：<b>onCalendarEventUpdated</b> ／ ソース：<b>カレンダーから</b> ／ 種類：<b>カレンダーが更新されたとき</b> を選択して保存</li>
               <li>Googleアカウントの許可を承認すれば完了。説明欄に <b>氏名: 山田太郎</b> と記入した予定を作成すると自動で招待状が生成されます（タイトル不問）</li>
+              <li className="mt-1 text-slate-500">【会議室空き状況を自動更新する場合】追加でトリガーを作成：関数 <b>syncRoomAvailability</b> ／ ソース：<b>時間主導型</b> ／ 種類：<b>分ベースのタイマー → 15分ごと</b></li>
             </ol>
             <div className="relative">
-              <pre className="bg-slate-800 text-emerald-300 text-xs rounded-lg p-4 overflow-x-auto whitespace-pre leading-relaxed">{`const RECEPTION_URL  = "https://reception-system-five.vercel.app/api/invitation";
-const SYNC_ROOMS_URL = "https://reception-system-five.vercel.app/api/sync-rooms";
+              <pre className="bg-slate-800 text-emerald-300 text-xs rounded-lg p-4 overflow-x-auto whitespace-pre leading-relaxed">{`const RECEPTION_URL   = "https://reception-system-five.vercel.app/api/invitation";
+const SYNC_ROOMS_URL  = "https://reception-system-five.vercel.app/api/sync-rooms";
+const AVAILABILITY_URL = "https://reception-system-five.vercel.app/api/room-availability";
 const SECRET = ""; // 任意のシークレット文字列（設定推奨）
 
 function onCalendarEventUpdated(e) {
@@ -2754,6 +2822,39 @@ function onCalendarEventUpdated(e) {
       + '</div>';
     GmailApp.sendEmail(email, subject, "受付QRコードをご確認ください", { htmlBody: html });
   });
+}
+
+// ── 会議室の空き状況を同期（時間ベーストリガーで15〜30分ごとに実行推奨） ──
+function syncRoomAvailability() {
+  const today     = new Date();
+  const dateStr   = Utilities.formatDate(today, "Asia/Tokyo", "yyyy-MM-dd");
+  const cals      = CalendarApp.getAllCalendars()
+    .filter(c => c.getId().includes("@resource.calendar.google.com"));
+
+  const rooms = cals.map(c => ({
+    calendar_id: c.getId(),
+    events: c.getEventsForDay(today).map(ev => ({
+      title: ev.getTitle(),
+      start: Utilities.formatDate(ev.getStartTime(), "Asia/Tokyo", "HH:mm"),
+      end:   Utilities.formatDate(ev.getEndTime(),   "Asia/Tokyo", "HH:mm"),
+    })),
+  }));
+
+  if (!rooms.length) {
+    Logger.log("⚠️ リソースカレンダーが見つかりません（先に syncRoomsToReception を実行してください）");
+    return;
+  }
+
+  const res = UrlFetchApp.fetch(AVAILABILITY_URL, {
+    method:             "post",
+    contentType:        "application/json",
+    muteHttpExceptions: true,
+    payload:            JSON.stringify({ date: dateStr, rooms, secret: SECRET }),
+  });
+
+  Logger.log("空き状況同期: " + res.getResponseCode()
+    + " / " + rooms.length + "室 / "
+    + rooms.map(r => r.calendar_id.split("@")[0] + "(" + r.events.length + "件)").join(", "));
 }
 
 // ── 会議室をリソースカレンダーから同期（手動で一度だけ実行） ──
