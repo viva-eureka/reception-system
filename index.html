@@ -1054,26 +1054,21 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
   if (screen === "visitor") {
     // 設定で有効にされた受付方法（音声はAPIキー必須）
     const enabledIds = db.settings.visitorMethods || DEFAULT_VISITOR_METHODS;
+    const showQr       = enabledIds.includes("qr");
+    const showCard     = enabledIds.includes("card");
+    const showKeyboard = enabledIds.includes("keyboard");
     const voiceEnabled = enabledIds.includes("voice") && !!getApiKey();
-    const regularMethods = VISITOR_METHODS
-      .filter(m => m.id !== "voice" && enabledIds.includes(m.id));
-    const cols = regularMethods.length === 1 ? "grid-cols-1" :
-                 regularMethods.length === 2 ? "grid-cols-2" : "grid-cols-3";
-    const methodAction = (id) => {
-      if (id === "qr")       return () => setPickerOpen(true);
-      if (id === "card")     return () => { setCardStep("camera"); setScreen("card"); };
-      if (id === "keyboard") return () => setScreen("keyboard");
-      return () => {};
-    };
+    const regularCount = [showQr, showCard, showKeyboard].filter(Boolean).length;
+    const cols = regularCount <= 1 ? "grid-cols-1" :
+                 regularCount === 2 ? "grid-cols-2" : "grid-cols-3";
     return (
       <KioskShell>
         <Header title="受付方法をお選びください" onBack={() => setScreen("menu")} />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col">
           <div className={"grid " + cols + " gap-4 p-8 " + (voiceEnabled ? "pb-4" : "")}>
-            {regularMethods.map(m => (
-              <BigButton key={m.id} emoji={m.emoji} label={m.label} sub={m.sub}
-                color={m.color} onClick={methodAction(m.id)} />
-            ))}
+            {showQr       && <BigButton emoji="📷" label="QRコードをかざす"  sub="招待メールのQRを読み取ります"    color="from-emerald-400 to-teal-500"    onClick={() => setPickerOpen(true)} />}
+            {showCard     && <BigButton emoji="💳" label="名刺を撮影"        sub="名刺をかざすと自動で読み取ります" color="from-sky-400 to-blue-500"        onClick={() => { setCardStep("camera"); setScreen("card"); }} />}
+            {showKeyboard && <BigButton emoji="⌨️" label="お名前を入力"      sub="キーボードで受付します"           color="from-violet-400 to-purple-500"   onClick={() => setScreen("keyboard")} />}
           </div>
           {voiceEnabled && (
             <div className="px-8 pb-8">
