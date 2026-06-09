@@ -368,6 +368,7 @@ async function loadFromSupabase() {
       afterHoursReception: kv["allow_outside_hours"] === true || kv["allow_outside_hours"] === "true",
       chatWebhook:       kv["google_chat_webhook"] || "",
       rooms:             rooms.length ? rooms : ["会議室A", "会議室B", "応接室"],
+      visitorMethods:    (() => { try { const v = kv["visitor_methods"]; if (!v) return DEFAULT_VISITOR_METHODS; return Array.isArray(v) ? v : JSON.parse(String(v).replace(/^"|"$/g,"")); } catch { return DEFAULT_VISITOR_METHODS; } })(),
     },
     invitations,
     logs,
@@ -434,6 +435,7 @@ async function syncToSupabase(next, prev) {
       { key: "allow_outside_hours",  value: s.afterHoursReception },
       { key: "business_hours",       value: s.businessHours },
       { key: "google_chat_webhook",  value: s.chatWebhook || null },
+      { key: "visitor_methods",      value: s.visitorMethods || DEFAULT_VISITOR_METHODS },
     ];
     for (const row of rows) {
       await sb.from("reception_settings").upsert(row, { onConflict: "key" });
@@ -466,6 +468,15 @@ function loadLocalDB() {
 }
 function saveLocalDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 
+/* 来訪受付方法マスター */
+const VISITOR_METHODS = [
+  { id: "qr",       emoji: "📷", label: "QRコードをかざす", sub: "招待メールのQRを読み取ります",    color: "from-emerald-400 to-teal-500" },
+  { id: "card",     emoji: "💳", label: "名刺を撮影",       sub: "名刺をかざすと自動で読み取ります", color: "from-sky-400 to-blue-500" },
+  { id: "keyboard", emoji: "⌨️", label: "お名前を入力",     sub: "キーボードで受付します",           color: "from-violet-400 to-purple-500" },
+  { id: "voice",    emoji: "🎤", label: "AI 音声受付",      sub: "お名前を話すだけで受付完了",       color: "from-indigo-600 to-violet-700", requiresApiKey: true },
+];
+const DEFAULT_VISITOR_METHODS = ["qr", "card", "keyboard"];
+
 const BTN_COLORS = [
   { label: "アンバー",  val: "from-amber-400 to-orange-500" },
   { label: "ブルー",    val: "from-sky-400 to-indigo-500" },
@@ -487,6 +498,7 @@ const defaultDB = () => ({
     afterHoursReception: false,
     chatWebhook: "https://chat.googleapis.com/v1/spaces/AAAA.../messages?key=...（デモ）",
     rooms: ["会議室A", "会議室B", "応接室"],
+    visitorMethods: DEFAULT_VISITOR_METHODS,
   },
   invitations: [
     { id: "inv1", code: "VE-7F3K9A", visitorName: "山田 太郎", company: "株式会社サンプル商事",
@@ -1065,16 +1077,55 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
   /* ---- 来訪者: QR / キーボード 選択 ---- */
   if (screen === "visitor") {
+    // 設定で有効にされた受付方法（音声はAPIキー必須）
+    const enabledIds = db.settings.visitorMethods || DEFAULT_VISITOR_METHODS;
+    const voiceEnabled = enabledIds.includes("voice") && !!getApiKey();
+    const regularMethods = VISITOR_METHODS
+      .filter(m => m.id !== "voice" && enabledIds.includes(m.id));
+    const cols = regularMethods.length === 1 ? "grid-cols-1" :
+                 regularMethods.length === 2 ? "grid-cols-2" : "grid-cols-3";
+    const methodAction = (id) => {
+      if (id === "qr")       return () => setPickerOpen(true);
+      if (id === "card")     return () => { setCardStep("camera"); setScreen("card"); };
+      if (id === "keyboard") return () => setScreen("keyboard");
+      return () => {};
+    };
     return (
       <KioskShell>
         <Header title="受付方法をお選びください" onBack={() => setScreen("menu")} />
-        <div className="flex-1 grid grid-cols-3 gap-4 p-8">
-          <BigButton emoji="📷" label="QRコードをかざす" sub="招待メールのQRを読み取ります"
-            color="from-emerald-400 to-teal-500" onClick={() => setPickerOpen(true)} />
-          <BigButton emoji="💳" label="名刺を撮影" sub="名刺をかざすと自動で読み取ります"
-            color="from-sky-400 to-blue-500" onClick={() => { setCardStep("camera"); setScreen("card"); }} />
-          <BigButton emoji="⌨️" label="お名前を入力" sub="キーボードで受付します"
-            color="from-violet-400 to-purple-500" onClick={() => setScreen("keyboard")} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className={"grid " + cols + " gap-4 p-8 " + (voiceEnabled ? "pb-4" : "")}>
+            {regularMethods.map(m => (
+              <BigButton key={m.id} emoji={m.emoji} label={m.label} sub={m.sub}
+                color={m.color} onClick={methodAction(m.id)} />
+            ))}
+          </div>
+          {voiceEnabled && (
+            <div className="px-8 pb-8">
+              <button onClick={() => { setVoiceStep("idle"); setScreen("voice"); }}
+                className="voice-btn w-full group relative overflow-hidden rounded-2xl px-6 py-5 active:scale-95 transition-transform"
+                style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)" }}>
+                <div className="absolute inset-0 pointer-events-none"
+                  style={{ background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%)", backgroundSize: "200% 100%", animation: "voiceshine 3s linear infinite" }} />
+                <div className="relative flex items-center justify-center gap-5">
+                  <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                    <span className="absolute inset-0 rounded-full bg-violet-400/20 animate-ping" style={{ animationDuration: "2.4s" }} />
+                    <span className="absolute inset-1.5 rounded-full bg-violet-400/20 animate-ping" style={{ animationDuration: "2.4s", animationDelay: ".5s" }} />
+                    <span className="absolute inset-3 rounded-full bg-violet-300/30 animate-ping" style={{ animationDuration: "2.4s", animationDelay: "1s" }} />
+                    <span className="relative text-3xl">🎤</span>
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="voice-shine text-2xl font-black tracking-wide">AI 音声受付</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
+                        style={{ background: "linear-gradient(to right, #a855f7, #ec4899)" }}>Claude</span>
+                    </div>
+                    <div className="text-sm text-violet-300 font-medium">✨ お名前を話すだけで受付完了</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
 
         {pickerOpen && (
@@ -2519,6 +2570,52 @@ function StaffNotificationSettings() {
   );
 }
 
+/* ---- 来訪受付方法の表示設定 ---- */
+function VisitorMethodsSetting({ value, onChange }) {
+  const apiKey = getApiKey();
+  return (
+    <div className="space-y-2">
+      {VISITOR_METHODS.map(m => {
+        const checked = value.includes(m.id);
+        const disabled = m.requiresApiKey && !apiKey;
+        return (
+          <label key={m.id}
+            className={"flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition " +
+              (disabled ? "opacity-40 cursor-not-allowed border-slate-100 bg-slate-50" :
+               checked  ? "border-sky-200 bg-sky-50" : "border-slate-200 bg-white hover:bg-slate-50")}>
+            <input type="checkbox" checked={checked} disabled={disabled}
+              onChange={e => {
+                const next = e.target.checked
+                  ? [...value, m.id]
+                  : value.filter(id => id !== m.id);
+                onChange(next);
+              }}
+              className="w-4 h-4 accent-sky-500" />
+            <span className={"w-8 h-8 rounded-xl flex items-center justify-center text-lg bg-gradient-to-br text-white " + m.color}>
+              {m.emoji}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-800">{m.label}</span>
+                {m.requiresApiKey && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-600">Claude AI</span>
+                )}
+              </div>
+              <div className="text-xs text-slate-400">{m.sub}</div>
+            </div>
+            {m.requiresApiKey && !apiKey && (
+              <span className="text-xs text-amber-500 shrink-0">APIキー未設定</span>
+            )}
+          </label>
+        );
+      })}
+      <p className="text-xs text-slate-400 pt-1">
+        ※ AI音声受付は「AI音声受付」セクションでAPIキーを設定した場合のみ有効になります。
+      </p>
+    </div>
+  );
+}
+
 /* ---- 会議室設定（Supabase reception_rooms と同期） ---- */
 function RoomsSyncSetting({ onSync }) {
   const [rooms, setRooms]       = useState([]);
@@ -2706,6 +2803,14 @@ function Settings({ db, setDB }) {
           </div>
         </label>
         <p className="text-xs text-slate-400">時間外・定休日は「ただいま営業時間外です」を表示します。</p>
+      </Card>
+
+      <Card className="p-6 mb-5 space-y-3">
+        <h2 className="font-bold text-slate-700">来訪受付方法</h2>
+        <p className="text-xs text-slate-500">「来訪者」を選んだ後の受付方法選択画面に表示する方法を選択します。</p>
+        <VisitorMethodsSetting
+          value={s.visitorMethods || DEFAULT_VISITOR_METHODS}
+          onChange={(next) => set({ visitorMethods: next })} />
       </Card>
 
       <Card className="p-6 mb-5 space-y-3">
