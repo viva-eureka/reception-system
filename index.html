@@ -2386,37 +2386,56 @@ function CompanyInfoSetting() {
 }
 
 function WebhookSetting() {
-  const [url, setUrl] = React.useState("");
-  const [saved, setSaved] = React.useState(false);
+  const [url, setUrl]       = React.useState("");
+  const [status, setStatus] = React.useState("idle"); // idle | saving | saved | error
+  const [errMsg, setErrMsg] = React.useState("");
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    sb.from("reception_settings").select("value").eq("key","webhook_url").maybeSingle()
-      .then(({ data }) => {
-        const v = data?.value;
-        setUrl(typeof v === "string" ? v.replace(/^"|"$/g,"") : (v || ""));
+    sb.from("reception_settings").select("value").eq("key", "webhook_url").maybeSingle()
+      .then(({ data, error }) => {
+        if (!error && data?.value !== undefined) {
+          const v = data.value;
+          // JSONB は JS 値として返ってくる。文字列なら使い、それ以外は空文字
+          setUrl(typeof v === "string" ? v.replace(/^"|"$/g, "") : "");
+        }
         setLoading(false);
       });
   }, []);
 
   const save = async () => {
-    await sb.from("reception_settings")
-      .upsert({ key: "webhook_url", value: JSON.stringify(url.trim()), updated_at: new Date().toISOString() });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setStatus("saving");
+    setErrMsg("");
+    const { error } = await sb.from("reception_settings")
+      .upsert({ key: "webhook_url", value: url.trim() }, { onConflict: "key" });
+    if (error) {
+      setStatus("error");
+      setErrMsg(error.message);
+      return;
+    }
+    setStatus("saved");
+    setTimeout(() => setStatus("idle"), 2500);
   };
 
   if (loading) return <div className="text-xs text-slate-400">読み込み中…</div>;
 
   return (
     <div className="space-y-2">
-      <input value={url} onChange={e => setUrl(e.target.value)}
-        placeholder="https://chat.googleapis.com/v1/spaces/..."
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono outline-none focus:border-sky-400" />
-      <button onClick={save}
-        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${saved ? "bg-emerald-500 text-white" : "bg-slate-800 text-white hover:bg-slate-700"}`}>
-        {saved ? "✓ 保存しました" : "保存"}
-      </button>
+      <div className="flex gap-2">
+        <input value={url} onChange={e => setUrl(e.target.value)}
+          placeholder="https://chat.googleapis.com/v1/spaces/..."
+          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono outline-none focus:border-sky-400" />
+        <button onClick={save} disabled={status === "saving"}
+          className={"px-4 py-2 rounded-lg text-sm font-medium transition-colors shrink-0 " +
+            (status === "saved"  ? "bg-emerald-500 text-white" :
+             status === "error"  ? "bg-red-500 text-white" :
+             status === "saving" ? "bg-slate-400 text-white" :
+             "bg-slate-800 text-white hover:bg-slate-700")}>
+          {status === "saved" ? "✓ 保存しました" : status === "saving" ? "保存中…" : status === "error" ? "エラー" : "保存"}
+        </button>
+      </div>
+      {status === "error" && <p className="text-xs text-red-500">❌ {errMsg}</p>}
+      {url && status === "saved" && <p className="text-xs text-emerald-600">✓ Webhook URL を保存しました</p>}
       <p className="text-xs text-slate-400">Google Chat スペース → アプリと統合 → Webhook を追加 で取得できます</p>
     </div>
   );
