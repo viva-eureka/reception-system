@@ -93,6 +93,23 @@
     position: absolute; left: 0; right: 0; height: 2px; pointer-events: none;
     animation: scanline 3s linear infinite;
   }
+  /* ---- AI音声ボタン演出 ---- */
+  @keyframes voiceglow {
+    0%,100% { box-shadow: 0 0 0 1px rgba(139,92,246,.4), 0 0 32px rgba(139,92,246,.5), 0 0 80px rgba(139,92,246,.15), 0 12px 32px rgba(0,0,0,.55); }
+    50%     { box-shadow: 0 0 0 1px rgba(167,139,250,.6), 0 0 56px rgba(139,92,246,.8), 0 0 120px rgba(139,92,246,.3), 0 12px 32px rgba(0,0,0,.55); }
+  }
+  .voice-btn { animation: voiceglow 2.8s ease-in-out infinite; }
+  @keyframes voiceshine {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  .voice-shine {
+    background: linear-gradient(100deg, #c4b5fd 15%, #ffffff 38%, #e9d5ff 55%, #c4b5fd 75%);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: voiceshine 4s linear infinite;
+  }
+
   /* テーマ切替ボタン */
   .theme-chip {
     width: 28px; height: 28px; border-radius: 9999px; border: 2px solid transparent;
@@ -957,20 +974,34 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
             </div>
             {getApiKey() ? (
               <>
-                <div className="fadeup-4 flex items-center gap-3 mt-4 w-64">
+                <div className="fadeup-4 flex items-center gap-3 mt-5 w-72">
                   <span className="flex-1 h-px bg-white/15" />
-                  <span className="text-white/35 text-xs tracking-widest">または</span>
+                  <span className="text-white/30 text-xs tracking-widest">または</span>
                   <span className="flex-1 h-px bg-white/15" />
                 </div>
                 <button onClick={e => { e.stopPropagation(); setVoiceStep("idle"); setScreen("voice"); }}
-                  className="fadeup-4 mt-3 flex items-center gap-3 px-7 py-3.5 rounded-full text-base font-semibold text-white transition active:scale-95"
-                  style={{ background: "linear-gradient(to right, #7c3aed, #a855f7)", boxShadow: "0 0 28px rgba(139,92,246,.5), 0 8px 20px rgba(0,0,0,.3)" }}>
-                  <span className="relative flex h-6 w-6 items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-white/30 animate-ping" />
-                    <span className="relative text-lg">🎤</span>
-                  </span>
-                  音声で受付する
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-white/20 font-normal tracking-wider">AI</span>
+                  className="fadeup-4 voice-btn mt-3 group relative overflow-hidden rounded-2xl px-7 py-4 active:scale-95 transition-transform"
+                  style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)" }}>
+                  {/* shimmer overlay */}
+                  <div className="absolute inset-0 pointer-events-none"
+                    style={{ background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%)", backgroundSize: "200% 100%", animation: "voiceshine 3s linear infinite" }} />
+                  <div className="relative flex items-center gap-4">
+                    {/* 3重リング＋マイクアイコン */}
+                    <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                      <span className="absolute inset-0 rounded-full bg-violet-400/20 animate-ping" style={{ animationDuration: "2.4s" }} />
+                      <span className="absolute inset-1.5 rounded-full bg-violet-400/20 animate-ping" style={{ animationDuration: "2.4s", animationDelay: ".5s" }} />
+                      <span className="absolute inset-3 rounded-full bg-violet-300/30 animate-ping" style={{ animationDuration: "2.4s", animationDelay: "1s" }} />
+                      <span className="relative text-2xl">🎤</span>
+                    </div>
+                    <div className="text-left">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="voice-shine text-xl font-black tracking-wide">AI 音声受付</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
+                          style={{ background: "linear-gradient(to right, #a855f7, #ec4899)" }}>Claude</span>
+                      </div>
+                      <div className="text-xs text-violet-300 font-medium tracking-wide">✨ お名前を話すだけで受付完了</div>
+                    </div>
+                  </div>
                 </button>
               </>
             ) : null}
@@ -987,19 +1018,46 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return (
       <KioskShell>
         <Header title="ご用件をお選びください" onBack={() => setScreen("standby")} />
-        <div className={"flex-1 grid " + cols + " gap-5 p-8"}>
-          {btns.map(btn => (
-            <BigButton key={btn.id} emoji={btn.emoji} label={btn.label} sub={btn.sub} color={btn.color}
-              onClick={() => {
-                if (btn.type === "delivery") handleDelivery();
-                else if (btn.type === "visitor") setScreen("visitor");
-                else {
-                  addLog({ name: "（その他）", company: "", type: "custom", host: btn.label });
-                  goDone("担当者へご連絡いたします。\n少々お待ちください。",
-                    "🔔 " + btn.label + "\n受付時刻: " + fmtTime(nowISO()));
-                }
-              }} />
-          ))}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className={"grid " + cols + " gap-5 p-8 " + (getApiKey() ? "pb-4" : "")}>
+            {btns.map(btn => (
+              <BigButton key={btn.id} emoji={btn.emoji} label={btn.label} sub={btn.sub} color={btn.color}
+                onClick={() => {
+                  if (btn.type === "delivery") handleDelivery();
+                  else if (btn.type === "visitor") setScreen("visitor");
+                  else {
+                    addLog({ name: "（その他）", company: "", type: "custom", host: btn.label });
+                    goDone("担当者へご連絡いたします。\n少々お待ちください。",
+                      "🔔 " + btn.label + "\n受付時刻: " + fmtTime(nowISO()));
+                  }
+                }} />
+            ))}
+          </div>
+          {getApiKey() && (
+            <div className="px-8 pb-8">
+              <button onClick={() => { setVoiceStep("idle"); setScreen("voice"); }}
+                className="voice-btn w-full group relative overflow-hidden rounded-2xl px-6 py-4 active:scale-95 transition-transform"
+                style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)" }}>
+                <div className="absolute inset-0 pointer-events-none"
+                  style={{ background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,.07) 50%, transparent 70%)", backgroundSize: "200% 100%", animation: "voiceshine 3s linear infinite" }} />
+                <div className="relative flex items-center justify-center gap-4">
+                  <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+                    <span className="absolute inset-0 rounded-full bg-violet-400/20 animate-ping" style={{ animationDuration: "2.4s" }} />
+                    <span className="absolute inset-1.5 rounded-full bg-violet-400/20 animate-ping" style={{ animationDuration: "2.4s", animationDelay: ".5s" }} />
+                    <span className="relative text-xl">🎤</span>
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="voice-shine text-lg font-black tracking-wide">AI 音声で受付する</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
+                        style={{ background: "linear-gradient(to right, #a855f7, #ec4899)" }}>Claude</span>
+                    </div>
+                    <div className="text-xs text-violet-300">お名前を話すだけで受付完了</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </KioskShell>
     );
@@ -2567,6 +2625,7 @@ function Settings({ db, setDB }) {
   };
   const [btnForm, setBtnForm] = useState({ label: "", sub: "", emoji: "🔔", color: BTN_COLORS[0].val, type: "custom" });
   const [addingBtn, setAddingBtn] = useState(false);
+  const [scriptOpen, setScriptOpen] = useState(false);
 
   const bh = s.businessHours || DEFAULT_BUSINESS_HOURS;
   const setBH = (idx, patch) => {
@@ -2747,7 +2806,13 @@ function Settings({ db, setDB }) {
               <li>Googleアカウントの許可を承認すれば完了。説明欄に <b>氏名: 山田太郎</b> と記入した予定を作成すると自動で招待状が生成されます（タイトル不問）</li>
               <li className="mt-1 text-slate-500">【会議室空き状況を自動更新する場合】追加でトリガーを作成：関数 <b>syncRoomAvailability</b> ／ ソース：<b>時間主導型</b> ／ 種類：<b>分ベースのタイマー → 15分ごと</b></li>
             </ol>
-            <div className="relative">
+            <button onClick={() => setScriptOpen(o => !o)}
+              className="flex items-center gap-2 w-full text-left py-2 px-3 rounded-lg hover:bg-slate-100 transition text-sm text-slate-600 font-medium">
+              <span className="text-slate-400 text-xs">{scriptOpen ? "▼" : "▶"}</span>
+              {scriptOpen ? "スクリプトを閉じる" : "スクリプトを表示する"}
+              <span className="ml-auto text-xs text-slate-400 font-normal">クリックして{scriptOpen ? "折りたたむ" : "展開"}</span>
+            </button>
+            {scriptOpen && <div className="relative">
               <pre className="bg-slate-800 text-emerald-300 text-xs rounded-lg p-4 overflow-x-auto whitespace-pre leading-relaxed">{`const RECEPTION_URL   = "https://reception-system-five.vercel.app/api/invitation";
 const SYNC_ROOMS_URL  = "https://reception-system-five.vercel.app/api/sync-rooms";
 const AVAILABILITY_URL = "https://reception-system-five.vercel.app/api/room-availability";
@@ -2895,7 +2960,7 @@ function syncRoomsToReception() {
               }} className="absolute top-2 right-2 px-2 py-1 bg-white/10 hover:bg-white/20 text-white text-xs rounded">
                 コピー
               </button>
-            </div>
+            </div>}
           </div>
         </div>
       </Card>
