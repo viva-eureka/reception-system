@@ -62,10 +62,12 @@ module.exports = async (req, res) => {
         .upsert({ key: "admin_pin", value: newPin }, { onConflict: "key" });
       if (updateErr) return res.status(500).json({ error: updateErr.message });
 
-      // Chat Webhook URL を設定から取得
+      // Chat Webhook URL を設定から取得（notify.js と同じキー名 webhook_url を使用）
       const { data: wRow } = await sb.from("reception_settings")
-        .select("value").eq("key", "google_chat_webhook").maybeSingle();
-      const webhookUrl = wRow?.value || process.env.GOOGLE_CHAT_WEBHOOK_URL;
+        .select("value").eq("key", "webhook_url").maybeSingle();
+      const rawUrl = wRow?.value;
+      const webhookUrl = (typeof rawUrl === "string" ? rawUrl.replace(/^"|"$/g, "") : rawUrl)
+        || process.env.GOOGLE_CHAT_WEBHOOK_URL;
 
       let notifiedChat = false;
       if (webhookUrl) {
