@@ -33,6 +33,7 @@ module.exports = async (req, res) => {
     "admin_login", "admin_logout", "settings_change", "pin_change",
     "apikey_save", "invitation_create", "invitation_cancel",
     "visit_checkin", "delivery_checkin", "handle_response", "delegate_request",
+    "log_viewed",
   ];
   if (!ALLOWED_ACTIONS.includes(action)) {
     return res.status(400).json({ error: "invalid action" });
