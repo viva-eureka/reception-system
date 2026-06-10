@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ヘルプ・Q&A・Tips — 受付システム</title>
+<title>リリースノート — 受付システム</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,6 +15,7 @@
     line-height: 1.7;
   }
 
+  /* ── ヘッダー ── */
   .site-header {
     background: #1e293b;
     color: #fff;
@@ -48,19 +49,49 @@
   .site-header .nav a:hover { background: #334155; color: #fff; }
   .site-header .nav a.active { background: #0ea5e9; color: #fff; }
 
+  /* ── レイアウト ── */
   .layout {
-    max-width: 900px;
+    max-width: 860px;
     margin: 0 auto;
-    padding: 32px 24px 80px;
+    padding: 40px 24px 80px;
   }
 
-  .markdown h1 { font-size: 1.75rem; font-weight: 700; margin: 32px 0 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-  .markdown h2 { font-size: 1.25rem; font-weight: 700; margin: 36px 0 12px; color: #0f172a; }
-  .markdown h3 { font-size: 1.05rem; font-weight: 600; margin: 24px 0 8px; color: #334155; }
-  .markdown h4 { font-size: .95rem; font-weight: 600; margin: 16px 0 6px; color: #475569; }
-  .markdown p { margin: 0 0 12px; }
-  .markdown ul, .markdown ol { padding-left: 1.5em; margin: 0 0 12px; }
-  .markdown li { margin: 4px 0; }
+  /* ── Markdown スタイル ── */
+  .markdown h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0 0 32px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 12px;
+  }
+
+  /* バージョン見出し */
+  .markdown h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 40px 0 16px;
+    padding: 10px 16px;
+    background: #f1f5f9;
+    border-left: 4px solid #0ea5e9;
+    border-radius: 0 8px 8px 0;
+    color: #0f172a;
+  }
+  .markdown h2:first-of-type { margin-top: 0; }
+
+  /* カテゴリ見出し */
+  .markdown h3 {
+    font-size: .9rem;
+    font-weight: 700;
+    margin: 16px 0 6px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+
+  .markdown p { margin: 0 0 10px; }
+  .markdown ul { padding-left: 1.4em; margin: 0 0 12px; }
+  .markdown li { margin: 5px 0; font-size: .95rem; }
+  .markdown li strong { color: #0f172a; }
   .markdown a { color: #0ea5e9; text-decoration: none; }
   .markdown a:hover { text-decoration: underline; }
   .markdown code {
@@ -68,54 +99,16 @@
     border: 1px solid #e2e8f0;
     border-radius: 4px;
     padding: 1px 5px;
-    font-size: .875em;
+    font-size: .85em;
     font-family: "SFMono-Regular", Consolas, monospace;
   }
-  .markdown pre {
-    background: #1e293b;
-    color: #e2e8f0;
-    border-radius: 10px;
-    padding: 18px 20px;
-    overflow-x: auto;
-    margin: 12px 0 16px;
-  }
-  .markdown pre code {
-    background: none;
+  .markdown hr {
     border: none;
-    padding: 0;
-    color: inherit;
-    font-size: .85em;
+    border-top: 1px solid #e2e8f0;
+    margin: 36px 0;
   }
-  .markdown table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12px 0 16px;
-    font-size: .9rem;
-  }
-  .markdown th {
-    background: #f1f5f9;
-    padding: 8px 12px;
-    text-align: left;
-    border: 1px solid #e2e8f0;
-    font-weight: 600;
-  }
-  .markdown td {
-    padding: 8px 12px;
-    border: 1px solid #e2e8f0;
-    vertical-align: top;
-  }
-  .markdown tr:nth-child(even) td { background: #f8fafc; }
-  .markdown blockquote {
-    border-left: 4px solid #0ea5e9;
-    background: #f0f9ff;
-    padding: 12px 16px;
-    border-radius: 0 8px 8px 0;
-    margin: 12px 0 16px;
-    color: #0369a1;
-  }
-  .markdown hr { border: none; border-top: 1px solid #e2e8f0; margin: 32px 0; }
-  .markdown input[type=checkbox] { margin-right: 6px; }
 
+  /* ── ローディング ── */
   .loading { text-align: center; padding: 60px; color: #94a3b8; }
 </style>
 </head>
@@ -127,8 +120,8 @@
   <span class="title">ドキュメント</span>
   <nav class="nav">
     <a href="/guide.html">スタートアップガイド</a>
-    <a href="/help.html" class="active">ヘルプ・Q&A・Tips</a>
-    <a href="/changelog.html">リリースノート</a>
+    <a href="/help.html">ヘルプ・Q&A・Tips</a>
+    <a href="/changelog.html" class="active">リリースノート</a>
   </nav>
 </header>
 
@@ -139,7 +132,7 @@
 </div>
 
 <script>
-fetch('/docs/help-qa-tips.md')
+fetch('/docs/changelog.md')
   .then(r => r.text())
   .then(md => {
     document.getElementById('content').innerHTML = marked.parse(md);

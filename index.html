@@ -242,6 +242,7 @@ function Logo({ width = 300, customSrc = null }) {
 }
 
 /* ============================ Supabase クライアント ============================ */
+const APP_VERSION   = "1.4.0";
 const SUPABASE_URL  = "https://euseplsiazfwdirgbmwj.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1c2VwbHNpYXpmd2RpcmdibXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4ODY0MjAsImV4cCI6MjA5NjQ2MjQyMH0.qmqiZiYfPXCKNwC81rvh-ESZK4Wh7K92AVkPxUotRe4";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -1918,7 +1919,12 @@ function Admin({ db, setDB, notify, onLock, forceClosed, setForceClosed, onReset
               <span>🔒</span> 受付端末に戻る
             </button>
           )}
-          <div className="text-xs text-slate-600 px-1 pb-1">{db.settings.companyName}</div>
+          <div className="flex items-center justify-between px-1 pb-1 pt-0.5">
+            <span className="text-xs text-slate-600">{db.settings.companyName}</span>
+            <a href="/changelog.html" target="_blank" rel="noopener"
+              className="text-xs text-slate-500 hover:text-slate-300 transition"
+              title="リリースノートを見る">v{APP_VERSION}</a>
+          </div>
         </div>
       </aside>
       <main className="flex-1 overflow-auto p-8">
