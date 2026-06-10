@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>受付システム ホットモック</title>
+<title>受付システム</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -503,7 +503,7 @@ const VISITOR_METHODS = [
   { id: "qr",       emoji: "📷", label: "QRコードをかざす", sub: "招待メールのQRを読み取ります",    color: "from-emerald-400 to-teal-500" },
   { id: "card",     emoji: "💳", label: "名刺を撮影",       sub: "名刺をかざすと自動で読み取ります", color: "from-sky-400 to-blue-500" },
   { id: "keyboard", emoji: "⌨️", label: "お名前を入力",     sub: "キーボードで受付します",           color: "from-violet-400 to-purple-500" },
-  { id: "voice",    emoji: "🎤", label: "AI 音声受付",      sub: "お名前を話すだけで受付完了",       color: "from-indigo-600 to-violet-700", requiresApiKey: true },
+  { id: "voice",    emoji: "🎤", label: "声で受付",           sub: "お名前を話しかけてください",        color: "from-indigo-600 to-violet-700", requiresApiKey: true },
 ];
 const DEFAULT_VISITOR_METHODS = ["qr", "card", "keyboard"];
 
@@ -1217,7 +1217,7 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
                     </div>
                     <div className="text-left">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="voice-shine text-xl font-black tracking-wide">AI 音声受付</span>
+                        <span className="voice-shine text-xl font-black tracking-wide">声で受付</span>
                         <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
                           style={{ background: "linear-gradient(to right, #a855f7, #ec4899)" }}>Claude</span>
                       </div>
@@ -1296,7 +1296,7 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
                   </div>
                   <div className="text-left">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="voice-shine text-2xl font-black tracking-wide">AI 音声受付</span>
+                      <span className="voice-shine text-2xl font-black tracking-wide">声で受付</span>
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold text-white"
                         style={{ background: "linear-gradient(to right, #a855f7, #ec4899)" }}>Claude</span>
                     </div>
@@ -1828,7 +1828,7 @@ function BigButton({ emoji, label, sub, color, onClick }) {
 }
 
 /* ============================ 管理画面 ============================ */
-function Admin({ db, setDB, notify }) {
+function Admin({ db, setDB, notify, onLock, forceClosed, setForceClosed, onReset }) {
   const [tab, setTab] = useState("dashboard");
   const tabs = [
     ["dashboard", "ダッシュボード", "📊"],
@@ -1851,14 +1851,23 @@ function Admin({ db, setDB, notify }) {
             <span>{icon}</span> {label}
           </button>
         ))}
-        <div className="mt-auto px-3 text-xs text-slate-500">{db.settings.companyName}</div>
+        <div className="mt-auto px-3 space-y-2">
+          {onLock && (
+            <button onClick={onLock}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-white/10 text-sm transition">
+              <span>🔒</span> 受付端末に戻る
+            </button>
+          )}
+          <div className="text-xs text-slate-600 px-1">{db.settings.companyName}</div>
+        </div>
       </aside>
       <main className="flex-1 overflow-auto p-8">
         {tab === "dashboard" && <Dashboard db={db} />}
         {tab === "logs" && <Logs db={db} setDB={setDB} notify={notify} />}
         {tab === "invitations" && <InvitationManager />}
         {tab === "rooms" && <RoomsDashboard db={db} />}
-        {tab === "settings" && <Settings db={db} setDB={setDB} />}
+        {tab === "settings" && <Settings db={db} setDB={setDB}
+          forceClosed={forceClosed} setForceClosed={setForceClosed} onReset={onReset} />}
       </main>
     </div>
   );
@@ -2051,17 +2060,23 @@ function RoomsDashboard({ db }) {
     return () => clearInterval(t);
   }, []);
   const nowH = clock.getHours() + clock.getMinutes() / 60;
-  const DISPLAY_HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8〜20
+  // 8:00〜20:00 を 30分刻み（25スロット）
+  const DISPLAY_SLOTS = Array.from({ length: 25 }, (_, i) => 8 + i * 0.5);
+  const slotLabel = (h) => {
+    const hh = Math.floor(h);
+    const mm = h % 1 === 0 ? "00" : "30";
+    return `${hh}:${mm}`;
+  };
   const rooms = db.settings.rooms || [];
   const avail = db.roomAvailability || {};
   const syncedAt = db.availSyncedAt;
   const hasAvailData = Object.keys(avail).length > 0;
 
-  // h 時台にその部屋が使用中かチェック
+  // スロット h（0.5刻み）の部屋が使用中かチェック
   const isBusy = (room, h) =>
     (avail[room] || []).some(ev => h >= timeToH(ev.start) && h < timeToH(ev.end));
 
-  // ツールチップ用: h 時台に重なる予定タイトルを返す
+  // ツールチップ用: スロット h に重なる予定を返す
   const getEvent = (room, h) =>
     (avail[room] || []).find(ev => h >= timeToH(ev.start) && h < timeToH(ev.end));
 
@@ -2134,10 +2149,13 @@ function RoomsDashboard({ db }) {
           )}
         </div>
         <div className="min-w-[600px]">
-          {/* 時刻ヘッダー */}
+          {/* 時刻ヘッダー（30分刻み、整時のみ太字） */}
           <div className="flex mb-2 pl-36">
-            {DISPLAY_HOURS.map(h => (
-              <div key={h} className="flex-1 text-xs text-slate-400 text-center">{h}</div>
+            {DISPLAY_SLOTS.map(h => (
+              <div key={h} className={"flex-1 text-center leading-none " +
+                (h % 1 === 0 ? "text-xs text-slate-500 font-medium" : "text-[10px] text-slate-300")}>
+                {h % 1 === 0 ? Math.floor(h) : "·"}
+              </div>
             ))}
           </div>
           {/* 各部屋 */}
@@ -2145,16 +2163,16 @@ function RoomsDashboard({ db }) {
             <div key={room} className="flex items-center mb-3 gap-2">
               <div className="w-32 text-xs font-medium text-slate-700 shrink-0 text-right pr-3 leading-snug">{room}</div>
               <div className="flex-1 flex h-9 rounded-lg overflow-hidden relative border border-slate-200">
-                {DISPLAY_HOURS.map(h => {
+                {DISPLAY_SLOTS.map(h => {
                   const busy = isBusy(room, h);
-                  const isNow = Math.floor(nowH) === h;
+                  const isNowSlot = nowH >= h && nowH < h + 0.5;
                   const ev = busy ? getEvent(room, h) : null;
                   return (
-                    <div key={h} title={ev ? `${ev.start}〜${ev.end} ${ev.title || ""}` : ""}
-                      className={"flex-1 relative " +
+                    <div key={h} title={ev ? `${ev.start}〜${ev.end}${ev.title ? " " + ev.title : ""}` : slotLabel(h)}
+                      className={"flex-1 relative border-r border-white/40 " +
                         (busy ? "bg-rose-100" : "bg-emerald-50") +
-                        (isNow ? " ring-2 ring-inset ring-sky-400" : "")}>
-                      {busy && <div className="absolute inset-1 rounded bg-rose-300/60" />}
+                        (isNowSlot ? " ring-2 ring-inset ring-sky-400" : "")}>
+                      {busy && <div className="absolute inset-0.5 rounded-sm bg-rose-300/60" />}
                     </div>
                   );
                 })}
@@ -2948,7 +2966,7 @@ function RoomsSyncSetting({ onSync }) {
   );
 }
 
-function Settings({ db, setDB }) {
+function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
   const s = db.settings;
   const set = (patch) => setDB({ ...db, settings: { ...s, ...patch } });
   const [roomInput, setRoomInput] = useState("");
@@ -3378,6 +3396,35 @@ function syncRoomsToReception() {
         </p>
         <StaffNotificationSettings />
       </Card>
+      <Card className="p-6 mt-5 space-y-4">
+        <h2 className="font-bold text-slate-700">端末操作</h2>
+        {setForceClosed && (
+          <div>
+            <label className="flex items-center justify-between gap-4 cursor-pointer">
+              <div>
+                <div className="text-sm font-medium text-slate-700">営業時間外をシミュレート</div>
+                <div className="text-xs text-slate-400 mt-0.5">ONにすると受付端末が「営業時間外」の表示になります（動作確認用）</div>
+              </div>
+              <div onClick={() => setForceClosed(v => !v)}
+                className={"relative w-11 h-6 rounded-full transition-colors cursor-pointer shrink-0 " +
+                  (forceClosed ? "bg-amber-500" : "bg-slate-200")}>
+                <div className={"absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform " +
+                  (forceClosed ? "translate-x-5" : "translate-x-0.5")} />
+              </div>
+            </label>
+          </div>
+        )}
+        {onReset && (
+          <div>
+            <div className="text-sm font-medium text-slate-700 mb-1">データを再読み込み</div>
+            <div className="text-xs text-slate-400 mb-2">Supabase から最新データを取得します（ページリロードと同等）</div>
+            <button onClick={onReset}
+              className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm transition-colors">
+              🔄 再読み込み
+            </button>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -3456,31 +3503,6 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* デモ用ツールバー */}
-      <div className="bg-slate-950 text-white px-5 py-3 flex items-center gap-4 flex-wrap">
-        <span className="font-bold text-sky-400">受付システム ホットモック</span>
-        <div className="flex rounded-lg overflow-hidden border border-white/20">
-          <button onClick={() => setView("kiosk")}
-            className={"px-4 py-1.5 text-sm " + (view === "kiosk" ? "bg-sky-500" : "bg-transparent")}>📱 受付端末</button>
-          <button onClick={openAdmin}
-            className={"px-4 py-1.5 text-sm " + (view === "admin" ? "bg-sky-500" : "bg-transparent")}>🖥 管理画面</button>
-        </div>
-        {view === "kiosk" && (
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" checked={forceClosed} onChange={(e) => setForceClosed(e.target.checked)} />
-            営業時間外をシミュレート
-          </label>
-        )}
-        {view === "admin" && (
-          <button onClick={lockAdmin} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
-            🔒 管理画面をロック
-          </button>
-        )}
-        <button onClick={reset} className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20">
-          🔄 デモデータをリセット
-        </button>
-      </div>
-
       {/* PINモーダル */}
       {showPinModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -3521,19 +3543,22 @@ function App() {
       )}
 
       {/* 本体 */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        {view === "kiosk" ? (
-          <div className="ipad-frame bg-black p-3 w-[900px] max-w-full">
-            <div className="rounded-[26px] overflow-hidden h-[640px] relative">
-              <Kiosk db={db} setDB={setDB} notify={notify} forceClosed={forceClosed} />
-            </div>
-          </div>
-        ) : (
-          <div className="w-full max-w-6xl h-[680px] rounded-2xl overflow-hidden shadow-2xl border border-slate-700">
-            <Admin db={db} setDB={setDB} notify={notify} />
-          </div>
-        )}
-      </div>
+      {view === "kiosk" ? (
+        <div className="flex-1 relative">
+          <Kiosk db={db} setDB={setDB} notify={notify} forceClosed={forceClosed} />
+          {/* 管理画面への導線（目立たない） */}
+          <button onClick={openAdmin}
+            className="fixed bottom-2 right-2 w-8 h-8 rounded-full text-white/20 hover:text-white/50 text-xl flex items-center justify-center z-40 transition-colors select-none"
+            title="管理画面">⚙</button>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Admin db={db} setDB={setDB} notify={notify}
+            onLock={lockAdmin}
+            forceClosed={forceClosed} setForceClosed={setForceClosed}
+            onReset={reset} />
+        </div>
+      )}
 
       <ChatToast toast={toast} />
     </div>
