@@ -2030,8 +2030,6 @@ function Logs({ db, setDB, notify }) {
     a.click();
   };
 
-  const status = {};
-  [...db.logs].reverse().forEach((l) => { status[l.name] = l.action; });
   const cols = ALL_COLUMNS.filter(c => visibleCols[c.key]);
 
   return (
@@ -2093,7 +2091,7 @@ function Logs({ db, setDB, notify }) {
                   </td>
                 ))}
                 <td className="px-4 py-3 text-right">
-                  {l.type === "visitor" && status[l.name] === "入館" && (
+                  {l.action === "入館" && (
                     <button onClick={() => checkout(l)}
                       className="text-xs px-3 py-1 rounded-full bg-slate-800 text-white hover:bg-slate-700">退館にする</button>
                   )}
