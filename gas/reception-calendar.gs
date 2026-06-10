@@ -16,7 +16,7 @@
 //  6. setupTrigger() を一度だけ手動実行してトリガーを一括登録
 // ============================================================
 
-const RECEPTION_URL   = "https://reception-system-five.vercel.app";
+const RECEPTION_URL   = "https://reception-eureka.com";
 const COMPANY_DOMAIN  = "viva-eureka.co.jp"; // 自社ドメイン（社外ゲスト判定に使用）
 
 // 個人ドメイン扱いにして会社名推測をスキップするドメイン

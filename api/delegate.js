@@ -7,7 +7,7 @@
  *   GOOGLE_OAUTH_CLIENT_ID
  */
 
-const BASE_URL    = "https://reception-system-five.vercel.app";
+const BASE_URL    = "https://reception-eureka.com";
 const CALLBACK_URI = `${BASE_URL}/api/auth/callback`;
 
 module.exports = (req, res) => {

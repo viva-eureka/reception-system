@@ -16,6 +16,7 @@
 
 function cors(req, res) {
   const ALLOWED = [
+    "https://reception-eureka.com",
     "https://reception-system-five.vercel.app",
     "http://localhost:3000",
   ];

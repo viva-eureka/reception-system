@@ -12,7 +12,7 @@
  */
 const { createClient } = require("@supabase/supabase-js");
 
-const BASE_URL    = "https://reception-system-five.vercel.app";
+const BASE_URL    = "https://reception-eureka.com";
 const REDIRECT_URI = `${BASE_URL}/api/auth/callback`;
 
 function doneHtml(icon, message, bg) {

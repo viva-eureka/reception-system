@@ -14,9 +14,10 @@
 
 const { createClient } = require("@supabase/supabase-js");
 
-const BASE_URL = "https://reception-system-five.vercel.app";
+const BASE_URL = "https://reception-eureka.com";
 
 const ALLOWED_ORIGINS = [
+  "https://reception-eureka.com",
   "https://reception-system-five.vercel.app",
   "http://localhost:3000",
 ];

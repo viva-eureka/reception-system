@@ -6,7 +6,7 @@
 
 const { createClient } = require("@supabase/supabase-js");
 
-const BASE_URL = "https://reception-system-five.vercel.app";
+const BASE_URL = "https://reception-eureka.com";
 
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
