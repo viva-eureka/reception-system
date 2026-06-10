@@ -42,7 +42,6 @@ module.exports = (req, res) => {
   authUrl.searchParams.set("state",         state);
   authUrl.searchParams.set("hd",            "viva-eureka.co.jp");
   authUrl.searchParams.set("access_type",   "online");
-  authUrl.searchParams.set("prompt",        "select_account");
 
   res.redirect(302, authUrl.toString());
 };
