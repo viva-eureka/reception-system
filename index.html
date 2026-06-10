@@ -1272,14 +1272,14 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return (
       <KioskShell>
         <Header title="受付方法をお選びください" onBack={() => setScreen("menu")} />
-        <div className="flex-1 flex flex-col">
-          <div className={"grid " + cols + " gap-4 p-8 " + (voiceEnabled ? "pb-4" : "")}>
+        <div className="flex-1 flex flex-col justify-center gap-6 p-8">
+          <div className={"grid " + cols + " gap-6"}>
             {showQr       && <BigButton emoji="📷" label="QRコードをかざす"  sub="招待メールのQRを読み取ります"    color="from-emerald-400 to-teal-500"    onClick={() => setPickerOpen(true)} />}
             {showCard     && <BigButton emoji="💳" label="名刺を撮影"        sub="名刺をかざすと自動で読み取ります" color="from-sky-400 to-blue-500"        onClick={() => { setCardStep("camera"); setScreen("card"); }} />}
             {showKeyboard && <BigButton emoji="⌨️" label="お名前を入力"      sub="キーボードで受付します"           color="from-violet-400 to-purple-500"   onClick={() => setScreen("keyboard")} />}
           </div>
           {voiceEnabled && (
-            <div className="px-8 pb-8">
+            <div>
               <button onClick={() => { setVoiceStep("idle"); setScreen("voice"); }}
                 className="voice-btn w-full group relative overflow-hidden rounded-2xl px-6 py-5 active:scale-95 transition-transform"
                 style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%)" }}>
