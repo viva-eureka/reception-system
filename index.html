@@ -391,6 +391,9 @@ async function loadFromSupabase() {
       chatWebhook:       kv["google_chat_webhook"] || "",
       rooms:             rooms.length ? rooms : ["会議室A", "会議室B", "応接室"],
       visitorMethods:    (() => { try { const v = kv["visitor_methods"]; if (!v) return DEFAULT_VISITOR_METHODS; return Array.isArray(v) ? v : JSON.parse(String(v).replace(/^"|"$/g,"")); } catch { return DEFAULT_VISITOR_METHODS; } })(),
+      autoCheckoutMinutes:    parseInt(kv["auto_checkout_minutes"]) || 120,
+      deliveryCheckoutMinutes: parseInt(kv["delivery_checkout_minutes"]) || 5,
+      autoCheckoutEnabled:    kv["auto_checkout_enabled"] !== false && kv["auto_checkout_enabled"] !== "false",
     },
     invitations,
     logs,
@@ -458,11 +461,44 @@ async function syncToSupabase(next, prev) {
       { key: "business_hours",       value: s.businessHours },
       { key: "google_chat_webhook",  value: s.chatWebhook || null },
       { key: "visitor_methods",      value: s.visitorMethods || DEFAULT_VISITOR_METHODS },
+      { key: "auto_checkout_minutes",    value: s.autoCheckoutMinutes },
+      { key: "delivery_checkout_minutes", value: s.deliveryCheckoutMinutes },
+      { key: "auto_checkout_enabled",     value: s.autoCheckoutEnabled },
     ];
     for (const row of rows) {
       await sb.from("reception_settings").upsert(row, { onConflict: "key" });
     }
   }
+}
+
+/* ---- 自動退館処理 ---- */
+async function runAutoCheckout(db, setDB) {
+  if (!db.settings.autoCheckoutEnabled) return;
+  const now = new Date();
+  const autoMins     = db.settings.autoCheckoutMinutes     || 120;
+  const deliveryMins = db.settings.deliveryCheckoutMinutes || 5;
+
+  const toCheckout = db.logs.filter(l => {
+    if (l.action !== "入館") return false;
+    const checkinTime = new Date(l.ts);
+    const mins = l.type === "delivery" ? deliveryMins : autoMins;
+    return (now - checkinTime) / 60000 >= mins;
+  });
+
+  if (toCheckout.length === 0) return;
+
+  const checkedOutAt = now.toISOString();
+  const ids = toCheckout.map(l => l.id);
+  await fetch("/api/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, checked_out_at: checkedOutAt }),
+  }).catch(e => console.error("auto-checkout error:", e));
+
+  const updatedLogs = db.logs.map(l =>
+    ids.includes(l.id) ? { ...l, action: "退館", checked_out_at: checkedOutAt } : l
+  );
+  setDB(prev => ({ ...prev, logs: updatedLogs }));
 }
 
 /* ---- Google Chat カード送信 ---- */
@@ -525,6 +561,9 @@ const defaultDB = () => ({
     chatWebhook: "https://chat.googleapis.com/v1/spaces/AAAA.../messages?key=...（デモ）",
     rooms: ["会議室A", "会議室B", "応接室"],
     visitorMethods: DEFAULT_VISITOR_METHODS,
+    autoCheckoutMinutes: 120,
+    deliveryCheckoutMinutes: 5,
+    autoCheckoutEnabled: true,
   },
   invitations: [
     { id: "inv1", code: "VE-7F3K9A", visitorName: "山田 太郎", company: "株式会社サンプル商事",
@@ -1829,6 +1868,15 @@ function BigButton({ emoji, label, sub, color, onClick }) {
 /* ============================ 管理画面 ============================ */
 function Admin({ db, setDB, notify, onLock, forceClosed, setForceClosed, onReset }) {
   const [tab, setTab] = useState("dashboard");
+
+  // 自動退館: 1分ごとにチェック
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      runAutoCheckout(db, setDB);
+    }, 60 * 1000);
+    runAutoCheckout(db, setDB); // 初回即時実行
+    return () => clearInterval(timer);
+  }, [db.settings.autoCheckoutEnabled, db.settings.autoCheckoutMinutes, db.settings.deliveryCheckoutMinutes]);
   const tabs = [
     ["dashboard", "ダッシュボード", "📊"],
     ["logs", "入退館記録", "📋"],
@@ -1951,11 +1999,20 @@ function Logs({ db, setDB, notify }) {
   );
   const [colPickerOpen, setColPickerOpen] = useState(false);
 
-  const checkout = (log) => {
-    const next = { ...db, logs: [{ id: uid(), ts: nowISO(), action: "退館", name: log.name,
-      company: log.company, type: log.type, host: log.host }, ...db.logs] };
-    setDB(next);
-    notify("👋 退館しました\n氏名: " + log.name + "\n退館時刻: " + fmtTime(nowISO()));
+  const checkout = async (log) => {
+    const now = nowISO();
+    // Supabase 更新
+    await fetch("/api/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: log.id, checked_out_at: now }),
+    }).catch(e => console.error("checkout error:", e));
+    // ローカル state 更新（新規エントリではなく既存を更新）
+    const updatedLogs = db.logs.map(l =>
+      l.id === log.id ? { ...l, action: "退館", checked_out_at: now } : l
+    );
+    setDB({ ...db, logs: updatedLogs });
+    notify("👋 退館しました\n氏名: " + log.name + "\n退館時刻: " + fmtTime(now));
   };
 
   const exportCSV = () => {
@@ -3083,6 +3140,39 @@ function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
           </div>
         </label>
         <p className="text-xs text-slate-400">時間外・定休日は「ただいま営業時間外です」を表示します。</p>
+      </Card>
+
+      <Card className="p-6 mb-5 space-y-4">
+        <h2 className="font-bold text-slate-700">自動退館設定</h2>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div className={"relative inline-block w-10 h-6 rounded-full transition " + (s.autoCheckoutEnabled ? "bg-sky-500" : "bg-slate-300")}
+               onClick={() => set({ autoCheckoutEnabled: !s.autoCheckoutEnabled })}>
+            <div className={"absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all " + (s.autoCheckoutEnabled ? "left-5" : "left-1")} />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-slate-800">自動退館を有効にする</div>
+            <div className="text-xs text-slate-500">チェックイン後に一定時間経過で自動的に退館処理します</div>
+          </div>
+        </label>
+        {s.autoCheckoutEnabled && (
+          <div className="space-y-3 pl-1">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-600 w-28">一般来訪者</span>
+              <input type="number" min="1" max="480" value={s.autoCheckoutMinutes || 120}
+                onChange={e => set({ autoCheckoutMinutes: parseInt(e.target.value) || 120 })}
+                className="w-20 text-sm px-2 py-1 rounded border border-slate-200 text-center" />
+              <span className="text-sm text-slate-500">分後に自動退館</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-slate-600 w-28">配送業者</span>
+              <input type="number" min="1" max="60" value={s.deliveryCheckoutMinutes || 5}
+                onChange={e => set({ deliveryCheckoutMinutes: parseInt(e.target.value) || 5 })}
+                className="w-20 text-sm px-2 py-1 rounded border border-slate-200 text-center" />
+              <span className="text-sm text-slate-500">分後に自動退館</span>
+            </div>
+            <p className="text-xs text-slate-400">管理画面を表示している間、1分ごとに自動チェックされます。</p>
+          </div>
+        )}
       </Card>
 
       <Card className="p-6 mb-5 space-y-3">
