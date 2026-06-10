@@ -3289,9 +3289,10 @@ function syncRoomAvailability() {
   const rooms = cals.map(c => ({
     calendar_id: c.getId(),
     events: c.getEventsForDay(today).map(ev => ({
-      title: ev.getTitle(),
-      start: Utilities.formatDate(ev.getStartTime(), "Asia/Tokyo", "HH:mm"),
-      end:   Utilities.formatDate(ev.getEndTime(),   "Asia/Tokyo", "HH:mm"),
+      title:   ev.getTitle(),
+      start:   Utilities.formatDate(ev.getStartTime(), "Asia/Tokyo", "HH:mm"),
+      end:     Utilities.formatDate(ev.getEndTime(),   "Asia/Tokyo", "HH:mm"),
+      creator: (ev.getCreators()[0] || "").split("@")[0],
     })),
   }));
 
@@ -3563,10 +3564,10 @@ function App() {
       {view === "kiosk" ? (
         <div className="flex-1 relative overflow-hidden">
           <Kiosk db={db} setDB={setDB} notify={notify} forceClosed={forceClosed} />
-          {/* 管理画面への導線（目立たない） */}
+          {/* 管理画面への導線 */}
           <button onClick={openAdmin}
-            className="fixed bottom-2 right-2 w-8 h-8 rounded-full text-white/20 hover:text-white/50 text-xl flex items-center justify-center z-40 transition-colors select-none"
-            title="管理画面">⚙</button>
+            className="fixed bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 hover:bg-black/60 text-white/70 hover:text-white text-xs font-medium z-40 transition-all select-none backdrop-blur-sm"
+            title="管理画面">⚙ 管理</button>
         </div>
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden">
