@@ -293,14 +293,17 @@ function normalizeBH(raw) {
 /* ---- Supabase からロード ---- */
 async function loadFromSupabase() {
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [setRes, roomRes, btnRes, invRes, visitRes, availRes] = await Promise.all([
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Supabase接続タイムアウト（10秒）")), 10000)
+  );
+  const [setRes, roomRes, btnRes, invRes, visitRes, availRes] = await Promise.race([Promise.all([
     sb.from("reception_settings").select("key,value"),
     sb.from("reception_rooms").select("*").eq("is_active", true).order("sort_order"),
     sb.from("reception_buttons").select("*").eq("is_active", true).order("sort_order"),
     sb.from("reception_invitations").select("*").order("visit_date", { ascending: true }),
     sb.from("reception_visits").select("*").order("checked_in_at", { ascending: false }).limit(300),
     sb.from("reception_room_availability").select("*").eq("date", todayStr),
-  ]);
+  ]), timeout]);
 
   const kv = {};
   (setRes.data || []).forEach(r => { kv[r.key] = r.value; });
@@ -568,18 +571,15 @@ let _cloudApiKey = "";
 const getApiKey = () => _cloudApiKey || localStorage.getItem(API_KEY_STORAGE) || "";
 const setApiKey = (k) => { _cloudApiKey = k; localStorage.setItem(API_KEY_STORAGE, k); };
 
-/* ============================ Claude API呼び出し ============================ */
-async function callClaude(apiKey, userMessage) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+/* ============================ Claude API呼び出し（サーバーサイドプロキシ経由） ============================ */
+// ブラウザから直接 api.anthropic.com を呼ぶとAPIキーが露出するため
+// /api/claude プロキシ経由で呼び出す（APIキー不要）
+async function callClaude(_apiKey, userMessage) {
+  const res = await fetch("/api/claude", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-haiku-4-5",
       max_tokens: 256,
       messages: [{ role: "user", content: userMessage }],
     }),
@@ -590,18 +590,13 @@ async function callClaude(apiKey, userMessage) {
 }
 
 /** 名刺画像をClaudeビジョンで解析して氏名・会社名を返す */
-async function ocrBusinessCard(apiKey, dataURL) {
+async function ocrBusinessCard(_apiKey, dataURL) {
   const base64 = dataURL.replace(/^data:image\/\w+;base64,/, "");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/claude", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      model: "claude-haiku-4-5",
       max_tokens: 256,
       messages: [{
         role: "user",
@@ -681,7 +676,14 @@ function QRCamera({ onDetect }) {
           animId = requestAnimationFrame(tick);
         };
         animId = requestAnimationFrame(tick);
-      } catch (e) { if (active) setCamErr(e.message); }
+      } catch (e) {
+        if (active) {
+          const msg = e.name === "NotAllowedError"
+            ? "カメラの使用が許可されていません。\nSafari設定 → カメラ → 許可 に変更してください。"
+            : e.message;
+          setCamErr(msg);
+        }
+      }
     })();
 
     return () => {
@@ -692,10 +694,10 @@ function QRCamera({ onDetect }) {
   }, []);
 
   if (camErr) return (
-    <div className="flex flex-col items-center gap-2 py-6 text-center">
+    <div className="flex flex-col items-center gap-3 py-6 text-center px-4">
       <span className="text-4xl">📵</span>
-      <p className="text-slate-500 text-sm">カメラを起動できませんでした</p>
-      <p className="text-slate-400 text-xs">{camErr}</p>
+      <p className="text-slate-600 text-sm font-medium whitespace-pre-line">{camErr}</p>
+      <p className="text-slate-400 text-xs mt-1">QRコードをお持ちの方は下の「手動入力」からもご利用いただけます</p>
     </div>
   );
 
@@ -1092,7 +1094,9 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
 {"visitorName":"","company":"","host":""}`;
       const raw = await callClaude(getApiKey(), prompt);
-      const json = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error("Claude からの応答にJSONが含まれていませんでした。もう一度お試しください。");
+      const json = JSON.parse(m[0]);
       setVoiceResult(json);
       setVoiceStep("confirm");
       speak((json.visitorName || "お客様") + "様、いらっしゃいませ。内容をご確認ください。");
@@ -2711,7 +2715,7 @@ function PinChanger() {
     }
     setSaving(true);
     setAdminPin(next1); // localStorage + module変数
-    await sb().from("reception_settings")
+    await sb.from("reception_settings")
       .upsert({ key: "admin_pin", value: next1 }, { onConflict: "key" });
     setSaving(false);
     setCur(""); setNext1(""); setNext2("");
@@ -2752,7 +2756,7 @@ function ChimeSelector() {
     setChimePreset(key); // localStorage + module変数
     setSelected(key);
     // Supabaseにも保存（端末をまたいで共有）
-    sb().from("reception_settings")
+    sb.from("reception_settings")
       .upsert({ key: "chime_preset", value: key }, { onConflict: "key" })
       .then(() => {}).catch(() => {});
     try { (CHIME_PRESETS[key] || CHIME_PRESETS.soft).fn(); } catch(e) {}
@@ -2994,7 +2998,7 @@ function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
     const key = apiKeyInput.trim();
     setApiKeySaving(true);
     setApiKey(key); // localStorage + module変数
-    const { error } = await sb().from("reception_settings")
+    const { error } = await sb.from("reception_settings")
       .upsert({ key: "anthropic_api_key", value: key || null }, { onConflict: "key" });
     setApiKeySaving(false);
     if (!error) {

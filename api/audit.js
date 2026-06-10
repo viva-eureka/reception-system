@@ -28,6 +28,16 @@ module.exports = async (req, res) => {
   const { action, table_name, record_id, actor_name, user_email, new_data } = req.body || {};
   if (!action) return res.status(400).json({ error: "action required" });
 
+  // アクション種別のallowlist（不正なデータの書き込みを防止）
+  const ALLOWED_ACTIONS = [
+    "admin_login", "admin_logout", "settings_change", "pin_change",
+    "apikey_save", "invitation_create", "invitation_cancel",
+    "visit_checkin", "delivery_checkin", "handle_response", "delegate_request",
+  ];
+  if (!ALLOWED_ACTIONS.includes(action)) {
+    return res.status(400).json({ error: "invalid action" });
+  }
+
   const ip = (
     req.headers["x-forwarded-for"]?.split(",")[0] ||
     req.socket?.remoteAddress ||

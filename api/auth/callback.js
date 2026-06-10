@@ -118,6 +118,12 @@ module.exports = async (req, res) => {
   const responderName  = userInfo.name  || userInfo.email || "不明";
   const responderEmail = userInfo.email || "";
 
+  // 社内ドメインのみ許可（hd パラメータはUIヒントのみでサーバー側で検証が必要）
+  const ALLOWED_DOMAIN = "viva-eureka.co.jp";
+  if (!responderEmail.endsWith("@" + ALLOWED_DOMAIN)) {
+    return res.status(403).send(errHtml("社外のGoogleアカウントでは操作できません。<br>会社アカウント（@viva-eureka.co.jp）でログインしてください。"));
+  }
+
   const { action, visitId, visitor, company } = stateObj;
   const subtitle = company ? `${visitor}（${company}）` : (visitor || "");
   const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;

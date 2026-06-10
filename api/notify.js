@@ -16,10 +16,18 @@ const { createClient } = require("@supabase/supabase-js");
 
 const BASE_URL = "https://reception-system-five.vercel.app";
 
-function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+const ALLOWED_ORIGINS = [
+  "https://reception-system-five.vercel.app",
+  "http://localhost:3000",
+];
+
+function cors(req, res) {
+  const origin = req.headers.origin || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  res.setHeader("Access-Control-Allow-Origin", allowed);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
 }
 
 function buildHandleUrl(visitId, visitorName, company) {
@@ -162,14 +170,14 @@ async function getWebhookUrl() {
 }
 
 module.exports = async (req, res) => {
-  cors(res);
+  cors(req, res);
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const webhookUrl = await getWebhookUrl();
   if (!webhookUrl) return res.status(204).end();
 
-  const { visitId, visitorName, company, host, room, time, isDelivery, count, purpose } = req.body;
+  const { visitId, visitorName, company, host, room, time, isDelivery, count, purpose } = req.body || {};
 
   try {
     const card = isDelivery

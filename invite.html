@@ -68,7 +68,31 @@ async function load() {
     }
     const inv = body;
 
-    document.getElementById("visitor-name").textContent = inv.visitor_name;
+    // 受付済みチェック
+    if (inv.status === "arrived") {
+      showError("この招待状はすでに受付済みです。\n再度ご来社の際は担当者にご連絡ください。");
+      return;
+    }
+    // 有効期限チェック（来訪日の翌日以降は警告）
+    if (inv.visit_date) {
+      const visitDay = new Date(inv.visit_date + "T00:00:00+09:00");
+      const today    = new Date();
+      today.setHours(0, 0, 0, 0);
+      visitDay.setHours(0, 0, 0, 0);
+      if (visitDay < today) {
+        showError("この招待状の有効期限が切れています（来訪日: " + fmt(inv.visit_date) + "）。\n担当者にご連絡ください。");
+        return;
+      }
+    }
+
+    // XSS対策: すべての値は textContent で挿入する
+    function esc(str) {
+      const d = document.createElement("div");
+      d.textContent = str || "";
+      return d.innerHTML;
+    }
+
+    document.getElementById("visitor-name").textContent = inv.visitor_name || "";
 
     const infoRows = [
       inv.visit_date ? ["日時", fmt(inv.visit_date, inv.visit_time)] : null,
@@ -77,7 +101,7 @@ async function load() {
       inv.room ? ["会議室", inv.room] : null,
     ].filter(Boolean);
 
-    // ロゴ
+    // ロゴ（src は URL なのでそのまま）
     if (inv.company_logo) {
       const img = document.getElementById("logo-img");
       img.src = inv.company_logo;
@@ -90,12 +114,20 @@ async function load() {
       const addrEl = document.getElementById("company-info");
       addrEl.style.display = "block";
       if (inv.company_address) document.getElementById("company-address").textContent = inv.company_address;
-      if (inv.company_phone)   document.getElementById("company-phone").innerHTML =
-        `<a href="tel:${inv.company_phone}" style="color:#3b82f6">${inv.company_phone}</a>`;
+      if (inv.company_phone) {
+        // 電話番号は数字と+-()/スペースのみ許可
+        const phone = String(inv.company_phone).replace(/[^\d\+\-\(\)\ ]/g, "");
+        const a = document.createElement("a");
+        a.href = "tel:" + phone;
+        a.style.color = "#3b82f6";
+        a.textContent = inv.company_phone;
+        document.getElementById("company-phone").appendChild(a);
+      }
     }
 
+    // info-box は esc() でエスケープして innerHTML で構築
     document.getElementById("info-box").innerHTML = infoRows
-      .map(([l,v]) => `<div class="info-row"><span class="info-label">${l}</span><span class="info-val">${v}</span></div>`)
+      .map(([l,v]) => `<div class="info-row"><span class="info-label">${esc(l)}</span><span class="info-val">${esc(v)}</span></div>`)
       .join("");
 
     const qrData = encodeURIComponent(token);

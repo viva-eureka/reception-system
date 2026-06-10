@@ -43,11 +43,12 @@ async function getSettings(...keys) {
 async function notifyChat(webhookUrl, text) {
   if (!webhookUrl) return;
   try {
-    await fetch(webhookUrl, {
+    const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
+    if (!res.ok) console.error("Chat notify HTTP error:", res.status, await res.text());
   } catch (e) { console.error("Chat notify error:", e); }
 }
 
@@ -135,12 +136,31 @@ module.exports = async (req, res) => {
 
   /* ── PATCH: ステータス更新 ── */
   if (req.method === "PATCH") {
-    const { id, status } = req.body || {};
+    const { id, status, secret } = req.body || {};
     if (!id) return res.status(400).json({ error: "id required" });
+
+    // PATCH も secret チェック（POST と同様）
+    const invSecret = process.env.INVITATION_SECRET;
+    if (invSecret && secret !== invSecret) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    // ステータスの allowlist
+    const VALID_STATUSES = ["pending", "arrived", "no_show", "cancelled"];
+    const newStatus = status || "arrived";
+    if (!VALID_STATUSES.includes(newStatus)) {
+      return res.status(400).json({ error: "invalid status" });
+    }
+
+    // arrived 以外は arrived_at をセットしない
+    const updateData = {
+      status: newStatus,
+      ...(newStatus === "arrived" ? { arrived_at: new Date().toISOString() } : { arrived_at: null }),
+    };
 
     const { data, error } = await sb()
       .from("reception_invitations")
-      .update({ status: status || "arrived", arrived_at: new Date().toISOString() })
+      .update(updateData)
       .eq("id", id)
       .select()
       .single();
