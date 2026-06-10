@@ -305,6 +305,24 @@ async function loadFromSupabase() {
   const kv = {};
   (setRes.data || []).forEach(r => { kv[r.key] = r.value; });
 
+  // ---- クラウド設定を module 変数へ反映（端末をまたいで共有） ----
+  const _strVal = (v) => typeof v === "string" ? v.replace(/^"|"$/g, "") : (v != null ? String(v) : "");
+  const apiKeyCloud = _strVal(kv["anthropic_api_key"]);
+  if (apiKeyCloud) { _cloudApiKey = apiKeyCloud; localStorage.setItem(API_KEY_STORAGE, apiKeyCloud); }
+  else if (!apiKeyCloud && localStorage.getItem(API_KEY_STORAGE)) {
+    // ローカルにあってクラウドにない → 自動アップロード（マイグレーション）
+    const localKey = localStorage.getItem(API_KEY_STORAGE);
+    _cloudApiKey = localKey;
+    sb.from("reception_settings").upsert({ key: "anthropic_api_key", value: localKey }, { onConflict: "key" }).then(() => {});
+  }
+  const chimeCloud = _strVal(kv["chime_preset"]);
+  if (chimeCloud) { _cloudChimePreset = chimeCloud; localStorage.setItem(CHIME_PRESET_KEY, chimeCloud); }
+  else if (!chimeCloud && localStorage.getItem(CHIME_PRESET_KEY)) {
+    const localChime = localStorage.getItem(CHIME_PRESET_KEY);
+    _cloudChimePreset = localChime;
+    sb.from("reception_settings").upsert({ key: "chime_preset", value: localChime }, { onConflict: "key" }).then(() => {});
+  }
+
   const roomList = roomRes.data || [];
   const rooms = roomList.map(r => r.name);
 
@@ -538,8 +556,10 @@ const nowISO = () => new Date().toISOString();
 
 /* ============================ APIキー管理（DBリセットとは独立） ============================ */
 const API_KEY_STORAGE = "reception_anthropic_key";
-const getApiKey = () => localStorage.getItem(API_KEY_STORAGE) || "";
-const setApiKey = (k) => localStorage.setItem(API_KEY_STORAGE, k);
+// クラウド優先 → localStorage フォールバック（module変数はloadFromSupabaseで設定）
+let _cloudApiKey = "";
+const getApiKey = () => _cloudApiKey || localStorage.getItem(API_KEY_STORAGE) || "";
+const setApiKey = (k) => { _cloudApiKey = k; localStorage.setItem(API_KEY_STORAGE, k); };
 
 /* ============================ Claude API呼び出し ============================ */
 async function callClaude(apiKey, userMessage) {
@@ -767,8 +787,9 @@ function ChatToast({ toast }) {
 
 /* ============================ チャイム ============================ */
 const CHIME_PRESET_KEY = "chime_preset";
-const getChimePreset = () => localStorage.getItem(CHIME_PRESET_KEY) || "soft";
-const setChimePreset = (k) => localStorage.setItem(CHIME_PRESET_KEY, k);
+let _cloudChimePreset = "";
+const getChimePreset = () => _cloudChimePreset || localStorage.getItem(CHIME_PRESET_KEY) || "soft";
+const setChimePreset = (k) => { _cloudChimePreset = k; localStorage.setItem(CHIME_PRESET_KEY, k); };
 
 function _audioCtx() {
   return new (window.AudioContext || window.webkitAudioContext)();
@@ -2675,8 +2696,12 @@ function ChimeSelector() {
   const [selected, setSelected] = React.useState(getChimePreset());
   const keys = ["soft", "doorbell", "bell", "bright", "marimba"];
   const pick = (key) => {
-    setChimePreset(key);
+    setChimePreset(key); // localStorage + module変数
     setSelected(key);
+    // Supabaseにも保存（端末をまたいで共有）
+    sb().from("reception_settings")
+      .upsert({ key: "chime_preset", value: key }, { onConflict: "key" })
+      .then(() => {}).catch(() => {});
     try { (CHIME_PRESETS[key] || CHIME_PRESETS.soft).fn(); } catch(e) {}
   };
   return (
@@ -2911,11 +2936,18 @@ function Settings({ db, setDB }) {
   const [roomInput, setRoomInput] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState(getApiKey());
   const [apiKeySaved, setApiKeySaved] = useState(false);
-  const saveApiKey = () => {
-    setApiKey(apiKeyInput.trim());
-    setApiKeySaved(true);
-    setTimeout(() => setApiKeySaved(false), 2000);
-    // 監査ログ
+  const [apiKeySaving, setApiKeySaving] = useState(false);
+  const saveApiKey = async () => {
+    const key = apiKeyInput.trim();
+    setApiKeySaving(true);
+    setApiKey(key); // localStorage + module変数
+    const { error } = await sb().from("reception_settings")
+      .upsert({ key: "anthropic_api_key", value: key || null }, { onConflict: "key" });
+    setApiKeySaving(false);
+    if (!error) {
+      setApiKeySaved(true);
+      setTimeout(() => setApiKeySaved(false), 2500);
+    }
     fetch("/api/audit", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "settings_changed", table_name: "settings",
         new_data: { key: "claude_api_key", masked: "sk-ant-***" } }) }).catch(() => {});
@@ -3290,10 +3322,10 @@ function syncRoomsToReception() {
           <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)}
             placeholder="sk-ant-api03-..."
             className="flex-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-sky-400 text-sm font-mono" />
-          <button onClick={saveApiKey}
+          <button onClick={saveApiKey} disabled={apiKeySaving}
             className={"px-4 py-2 rounded-lg text-sm font-medium transition " +
-              (apiKeySaved ? "bg-emerald-500 text-white" : "bg-slate-800 text-white hover:bg-slate-700")}>
-            {apiKeySaved ? "✓ 保存済" : "保存"}
+              (apiKeySaved ? "bg-emerald-500 text-white" : "bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50")}>
+            {apiKeySaving ? "保存中..." : apiKeySaved ? "✓ 保存済" : "保存"}
           </button>
         </div>
         {getApiKey() && (
@@ -3302,7 +3334,7 @@ function syncRoomsToReception() {
           </div>
         )}
         <p className="text-xs text-slate-400">
-          ⚠️ このキーはブラウザのlocalStorageに保存されます。デモ・検証用途のみに使用してください。本番環境ではサーバーサイドで管理してください。
+          ☁️ キーは Supabase にクラウド保存されます。端末を変えても再設定不要です。
         </p>
         <p className="text-xs text-slate-400">受付・退館時にこのWebhookへ通知を送信します。</p>
       </Card>
