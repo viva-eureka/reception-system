@@ -3502,7 +3502,7 @@ function App() {
                     const next = pinInput + k;
                     setPinInput(next);
                     if (next.length === 4) {
-                      if (next === getPin()) { setPinUnlocked(true); setShowPinModal(false); setView("admin"); setPinInput(""); }
+                      if (next === getAdminPin()) { setPinUnlocked(true); setShowPinModal(false); setView("admin"); setPinInput(""); }
                       else { setPinError(true); setTimeout(() => { setPinError(false); setPinInput(""); }, 1000); }
                     }
                   }}
