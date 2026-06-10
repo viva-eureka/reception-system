@@ -31,6 +31,23 @@ const PERSONAL_DOMAINS = [
 //     トリガー設定: 「カレンダーから」→「更新時（イベントの更新）」
 // ─────────────────────────────────────────────────────────────
 function onCalendarEventUpdated(e) {
+  // 同一イベントの複数回発火による重複処理を防ぐ
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // 最大10秒待機
+  } catch (err) {
+    Logger.log("ロック取得タイムアウト（他の実行が処理中）: " + err);
+    return;
+  }
+
+  try {
+    _onCalendarEventUpdatedBody(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _onCalendarEventUpdatedBody(e) {
   const calendarId = e.calendarId;
   const props      = PropertiesService.getScriptProperties();
   const now        = new Date();
