@@ -2260,6 +2260,11 @@ function RoomsDashboard({ db }) {
                     </div>
                   );
                 })}
+                {/* 1時間ごとの縦線 */}
+                {[9,10,11,12,13,14,15,16,17,18,19].map(h => (
+                  <div key={"g"+h} className="absolute top-0 bottom-0 w-px bg-slate-400/30 pointer-events-none"
+                    style={{ left: ((h - 8) / 12 * 100) + "%" }} />
+                ))}
                 {/* 現在時刻の縦線 */}
                 {nowH >= 8 && nowH <= 20 && (
                   <div className="absolute top-0 bottom-0 w-0.5 bg-sky-500 z-10"
