@@ -2233,14 +2233,17 @@ function RoomsDashboard({ db }) {
           )}
         </div>
         <div className="min-w-[600px]">
-          {/* 時刻ヘッダー（30分刻み、整時のみ太字） */}
-          <div className="flex mb-2 pl-36">
-            {DISPLAY_SLOTS.map(h => (
-              <div key={h} className={"flex-1 text-center leading-none " +
-                (h % 1 === 0 ? "text-xs text-slate-500 font-medium" : "text-[10px] text-slate-300")}>
-                {h % 1 === 0 ? Math.floor(h) : "·"}
-              </div>
-            ))}
+          {/* 時刻ヘッダー（バーと同構造で絶対配置 → 縦線と完全一致） */}
+          <div className="flex mb-2 gap-2 items-end">
+            <div className="w-32 shrink-0" />
+            <div className="flex-1 relative h-4">
+              {Array.from({length: 13}, (_, i) => i + 8).map(h => (
+                <span key={h} className="absolute text-xs text-slate-500 font-medium leading-none -translate-x-1/2"
+                  style={{ left: ((h - 8) / 12 * 100) + "%" }}>
+                  {h}
+                </span>
+              ))}
+            </div>
           </div>
           {/* 各部屋 */}
           {rooms.map(room => (
