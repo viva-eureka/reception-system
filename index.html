@@ -310,14 +310,7 @@ async function loadFromSupabase() {
 
   // ---- クラウド設定を module 変数へ反映（端末をまたいで共有） ----
   const _strVal = (v) => typeof v === "string" ? v.replace(/^"|"$/g, "") : (v != null ? String(v) : "");
-  const apiKeyCloud = _strVal(kv["anthropic_api_key"]);
-  if (apiKeyCloud) { _cloudApiKey = apiKeyCloud; localStorage.setItem(API_KEY_STORAGE, apiKeyCloud); }
-  else if (!apiKeyCloud && localStorage.getItem(API_KEY_STORAGE)) {
-    // ローカルにあってクラウドにない → 自動アップロード（マイグレーション）
-    const localKey = localStorage.getItem(API_KEY_STORAGE);
-    _cloudApiKey = localKey;
-    sb.from("reception_settings").upsert({ key: "anthropic_api_key", value: localKey }, { onConflict: "key" }).then(() => {});
-  }
+  // anthropic_api_key は Vercel 環境変数に移行済み。Supabase/localStorage には保存しない。
   const chimeCloud = _strVal(kv["chime_preset"]);
   if (chimeCloud) { _cloudChimePreset = chimeCloud; localStorage.setItem(CHIME_PRESET_KEY, chimeCloud); }
   else if (!chimeCloud && localStorage.getItem(CHIME_PRESET_KEY)) {
@@ -564,12 +557,13 @@ const fmtDateTime = (iso) => {
 };
 const nowISO = () => new Date().toISOString();
 
-/* ============================ APIキー管理（DBリセットとは独立） ============================ */
-const API_KEY_STORAGE = "reception_anthropic_key";
-// クラウド優先 → localStorage フォールバック（module変数はloadFromSupabaseで設定）
-let _cloudApiKey = "";
-const getApiKey = () => _cloudApiKey || localStorage.getItem(API_KEY_STORAGE) || "";
-const setApiKey = (k) => { _cloudApiKey = k; localStorage.setItem(API_KEY_STORAGE, k); };
+/* ============================ Claude API（Vercel環境変数管理） ============================ */
+// APIキーは Vercel 環境変数 ANTHROPIC_API_KEY で管理。ブラウザには渡さない。
+// 旧バージョンで localStorage に保存されていたキーを削除
+localStorage.removeItem("reception_anthropic_key");
+// getApiKey() は機能フラグとして使用（truthy = 音声・名刺機能を有効化）
+const getApiKey = () => "server-managed";
+const setApiKey = () => {}; // 廃止
 
 /* ============================ Claude API呼び出し（サーバーサイドプロキシ経由） ============================ */
 // ブラウザから直接 api.anthropic.com を呼ぶとAPIキーが露出するため
@@ -2991,24 +2985,7 @@ function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
   const s = db.settings;
   const set = (patch) => setDB({ ...db, settings: { ...s, ...patch } });
   const [roomInput, setRoomInput] = useState("");
-  const [apiKeyInput, setApiKeyInput] = useState(getApiKey());
-  const [apiKeySaved, setApiKeySaved] = useState(false);
-  const [apiKeySaving, setApiKeySaving] = useState(false);
-  const saveApiKey = async () => {
-    const key = apiKeyInput.trim();
-    setApiKeySaving(true);
-    setApiKey(key); // localStorage + module変数
-    const { error } = await sb.from("reception_settings")
-      .upsert({ key: "anthropic_api_key", value: key || null }, { onConflict: "key" });
-    setApiKeySaving(false);
-    if (!error) {
-      setApiKeySaved(true);
-      setTimeout(() => setApiKeySaved(false), 2500);
-    }
-    fetch("/api/audit", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "settings_changed", table_name: "settings",
-        new_data: { key: "claude_api_key", masked: "sk-ant-***" } }) }).catch(() => {});
-  };
+  // APIキーはVercel環境変数で管理済み。設定UIは不要。
   const [btnForm, setBtnForm] = useState({ label: "", sub: "", emoji: "🔔", color: BTN_COLORS[0].val, type: "custom" });
   const [addingBtn, setAddingBtn] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
@@ -3367,34 +3344,19 @@ function syncRoomsToReception() {
         <h2 className="font-bold text-slate-700">Google Chat 通知</h2>
         <WebhookSetting />
       </Card>
-      <Card className="p-6 mb-5 space-y-4">
+      <Card className="p-6 mb-5 space-y-3">
         <div className="flex items-center gap-2">
-          <h2 className="font-bold text-slate-700">AI音声受付</h2>
+          <h2 className="font-bold text-slate-700">AI音声受付 / 名刺受付</h2>
           <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">🎤 Claude API</span>
         </div>
-        <p className="text-xs text-slate-500">
-          APIキーを設定すると待ち受け画面に「音声で受付する」ボタンが表示されます。<br/>
-          キーは <a href="https://console.anthropic.com" target="_blank" className="text-blue-500 underline">console.anthropic.com</a> → API Keys から発行してください。
-        </p>
-        <div className="flex gap-2">
-          <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)}
-            placeholder="sk-ant-api03-..."
-            className="flex-1 px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-sky-400 text-sm font-mono" />
-          <button onClick={saveApiKey} disabled={apiKeySaving}
-            className={"px-4 py-2 rounded-lg text-sm font-medium transition " +
-              (apiKeySaved ? "bg-emerald-500 text-white" : "bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50")}>
-            {apiKeySaving ? "保存中..." : apiKeySaved ? "✓ 保存済" : "保存"}
-          </button>
+        <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+          <span>✅</span>
+          <span>APIキーはサーバー（Vercel）で管理されています。音声受付・名刺受付が利用可能です。</span>
         </div>
-        {getApiKey() && (
-          <div className="flex items-center gap-2 text-xs text-emerald-600">
-            ✓ APIキー設定済み — 待ち受け画面に🎤ボタンが表示されます
-          </div>
-        )}
         <p className="text-xs text-slate-400">
-          ☁️ キーは Supabase にクラウド保存されます。端末を変えても再設定不要です。
+          APIキーの変更は Vercel ダッシュボード → Settings → Environment Variables →{" "}
+          <code className="bg-slate-100 px-1 rounded">ANTHROPIC_API_KEY</code> から行ってください。
         </p>
-        <p className="text-xs text-slate-400">受付・退館時にこのWebhookへ通知を送信します。</p>
       </Card>
       <Card className="p-6 space-y-3">
         <h2 className="font-bold text-slate-700">会議室</h2>
