@@ -322,6 +322,13 @@ async function loadFromSupabase() {
     _cloudChimePreset = localChime;
     sb.from("reception_settings").upsert({ key: "chime_preset", value: localChime }, { onConflict: "key" }).then(() => {});
   }
+  const pinCloud = _strVal(kv["admin_pin"]);
+  if (pinCloud) { _cloudPin = pinCloud; localStorage.setItem("admin_pin", pinCloud); }
+  else if (!pinCloud && localStorage.getItem("admin_pin")) {
+    const localPin = localStorage.getItem("admin_pin");
+    _cloudPin = localPin;
+    sb.from("reception_settings").upsert({ key: "admin_pin", value: localPin }, { onConflict: "key" }).then(() => {});
+  }
 
   const roomList = roomRes.data || [];
   const rooms = roomList.map(r => r.name);
@@ -790,6 +797,11 @@ const CHIME_PRESET_KEY = "chime_preset";
 let _cloudChimePreset = "";
 const getChimePreset = () => _cloudChimePreset || localStorage.getItem(CHIME_PRESET_KEY) || "soft";
 const setChimePreset = (k) => { _cloudChimePreset = k; localStorage.setItem(CHIME_PRESET_KEY, k); };
+
+// 管理PINもクラウド保存
+let _cloudPin = "";
+const getAdminPin = () => _cloudPin || localStorage.getItem("admin_pin") || "1234";
+const setAdminPin = (p) => { _cloudPin = p; localStorage.setItem("admin_pin", p); };
 
 function _audioCtx() {
   return new (window.AudioContext || window.webkitAudioContext)();
@@ -2644,14 +2656,14 @@ function WebhookSetting() {
 }
 
 function PinChanger() {
-  const PIN_KEY = "admin_pin";
   const [cur,  setCur]  = useState("");
   const [next1, setNext1] = useState("");
   const [next2, setNext2] = useState("");
   const [msg,  setMsg]  = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  const save = () => {
-    if (cur !== (localStorage.getItem(PIN_KEY) || "1234")) {
+  const save = async () => {
+    if (cur !== getAdminPin()) {
       setMsg({ ok: false, text: "現在のPINが違います" }); return;
     }
     if (!/^\d{4}$/.test(next1)) {
@@ -2660,10 +2672,14 @@ function PinChanger() {
     if (next1 !== next2) {
       setMsg({ ok: false, text: "新PINが一致しません" }); return;
     }
-    localStorage.setItem(PIN_KEY, next1);
+    setSaving(true);
+    setAdminPin(next1); // localStorage + module変数
+    await sb().from("reception_settings")
+      .upsert({ key: "admin_pin", value: next1 }, { onConflict: "key" });
+    setSaving(false);
     setCur(""); setNext1(""); setNext2("");
-    setMsg({ ok: true, text: "PINを変更しました" });
-    setTimeout(() => setMsg(null), 2000);
+    setMsg({ ok: true, text: "☁️ PINを変更しました（クラウド保存）" });
+    setTimeout(() => setMsg(null), 2500);
   };
 
   return (
@@ -2684,9 +2700,9 @@ function PinChanger() {
       {msg && (
         <p className={`text-xs font-medium ${msg.ok ? "text-emerald-600" : "text-red-500"}`}>{msg.text}</p>
       )}
-      <button onClick={save}
-        className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700">
-        PINを変更
+      <button onClick={save} disabled={saving}
+        className="px-4 py-2 rounded-lg bg-slate-800 text-white text-sm font-medium hover:bg-slate-700 disabled:opacity-50">
+        {saving ? "保存中..." : "PINを変更"}
       </button>
     </div>
   );
@@ -3344,7 +3360,7 @@ function syncRoomsToReception() {
       </Card>
       <Card className="p-6 mt-5 space-y-3">
         <h2 className="font-bold text-slate-700">管理画面 PIN</h2>
-        <p className="text-xs text-slate-500">管理画面への切り替え時に要求する4桁のPINコードです。初期値は <b>1234</b> です。</p>
+        <p className="text-xs text-slate-500">管理画面への切り替え時に要求する4桁のPINコードです。初期値は <b>1234</b> です。☁️ クラウド保存されるため、忘れた場合は Supabase ダッシュボードの <code className="bg-slate-100 px-1 rounded">reception_settings</code> テーブルで <code className="bg-slate-100 px-1 rounded">admin_pin</code> 行を確認・削除できます。</p>
         <PinChanger />
       </Card>
       <Card className="p-6 mt-5 space-y-3">
@@ -3386,15 +3402,12 @@ function App() {
   const [pinError, setPinError] = useState(false);
   const [pinUnlocked, setPinUnlocked] = useState(false); // セッション中は一度解除で維持
 
-  const PIN_KEY = "admin_pin";
-  const getPin = () => localStorage.getItem(PIN_KEY) || "1234";
-
   const openAdmin = () => {
     if (pinUnlocked) { setView("admin"); return; }
     setPinInput(""); setPinError(false); setShowPinModal(true);
   };
   const submitPin = () => {
-    if (pinInput === getPin()) {
+    if (pinInput === getAdminPin()) {
       setPinUnlocked(true); setShowPinModal(false); setView("admin");
     } else {
       setPinError(true); setPinInput("");
