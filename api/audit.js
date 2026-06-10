@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     "admin_login", "admin_logout", "settings_change", "pin_change",
     "apikey_save", "invitation_create", "invitation_cancel",
     "visit_checkin", "delivery_checkin", "handle_response", "delegate_request",
-    "log_viewed",
+    "log_viewed", "pin_reset",
   ];
   if (!ALLOWED_ACTIONS.includes(action)) {
     return res.status(400).json({ error: "invalid action" });
@@ -51,6 +51,71 @@ module.exports = async (req, res) => {
       process.env.SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
+
+    // ── PIN リセット処理 ──────────────────────────────────────────
+    if (action === "pin_reset") {
+      const newPin = String(Math.floor(1000 + Math.random() * 9000));
+
+      // Supabase に新 PIN を保存
+      const { error: updateErr } = await sb
+        .from("reception_settings")
+        .upsert({ key: "admin_pin", value: newPin }, { onConflict: "key" });
+      if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+      // Chat Webhook URL を設定から取得
+      const { data: wRow } = await sb.from("reception_settings")
+        .select("value").eq("key", "google_chat_webhook").maybeSingle();
+      const webhookUrl = wRow?.value || process.env.GOOGLE_CHAT_WEBHOOK_URL;
+
+      let notifiedChat = false;
+      if (webhookUrl) {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: `🔑 *管理画面PINがリセットされました*\n新しいPIN: \`${newPin}\`\n\n管理画面にログイン後、すぐにPINを変更してください。`,
+          }),
+        }).catch(e => console.error("chat webhook error:", e));
+        notifiedChat = true;
+      }
+
+      // メール通知（RESEND_API_KEY + admin_email が設定されている場合）
+      let notifiedEmail = false;
+      const resendKey = process.env.RESEND_API_KEY;
+      const { data: eRow } = await sb.from("reception_settings")
+        .select("value").eq("key", "admin_email").maybeSingle();
+      const adminEmail = eRow?.value;
+      if (resendKey && adminEmail) {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${resendKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "noreply@reception-eureka.com",
+            to: [adminEmail],
+            subject: "【受付システム】管理PINがリセットされました",
+            html: `<p>管理画面のPINコードがリセットされました。</p>
+                   <p>新しいPIN: <strong style="font-size:28px;letter-spacing:6px;font-family:monospace">${newPin}</strong></p>
+                   <p>管理画面にログイン後、設定からすぐにPINを変更してください。</p>`,
+          }),
+        }).catch(e => console.error("resend error:", e));
+        notifiedEmail = true;
+      }
+
+      // 監査ログに記録
+      await sb.from("reception_audit_logs").insert({
+        action: "pin_reset",
+        ip_address: ip,
+        user_agent: ua,
+        new_data: { notified_chat: notifiedChat, notified_email: notifiedEmail },
+      });
+
+      return res.json({ ok: true, notified_chat: notifiedChat, notified_email: notifiedEmail });
+    }
+    // ─────────────────────────────────────────────────────────────
+
     await sb.from("reception_audit_logs").insert({
       action,
       table_name:  table_name || null,

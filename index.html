@@ -395,6 +395,7 @@ async function loadFromSupabase() {
       autoCheckoutMinutes:    parseInt(kv["auto_checkout_minutes"]) || 120,
       deliveryCheckoutMinutes: parseInt(kv["delivery_checkout_minutes"]) || 5,
       autoCheckoutEnabled:    kv["auto_checkout_enabled"] !== false && kv["auto_checkout_enabled"] !== "false",
+      adminEmail:             kv["admin_email"] || "",
     },
     invitations,
     logs,
@@ -465,6 +466,7 @@ async function syncToSupabase(next, prev) {
       { key: "auto_checkout_minutes",    value: s.autoCheckoutMinutes },
       { key: "delivery_checkout_minutes", value: s.deliveryCheckoutMinutes },
       { key: "auto_checkout_enabled",     value: s.autoCheckoutEnabled },
+      { key: "admin_email",               value: s.adminEmail || null },
     ];
     for (const row of rows) {
       await sb.from("reception_settings").upsert(row, { onConflict: "key" });
@@ -565,6 +567,7 @@ const defaultDB = () => ({
     autoCheckoutMinutes: 120,
     deliveryCheckoutMinutes: 5,
     autoCheckoutEnabled: true,
+    adminEmail: "",
   },
   invitations: [
     { id: "inv1", code: "VE-7F3K9A", visitorName: "山田 太郎", company: "株式会社サンプル商事",
@@ -3317,6 +3320,14 @@ function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
       <Card className="p-6 mb-5 space-y-4">
         <h2 className="font-bold text-slate-700">Google Chat 通知</h2>
         <WebhookSetting />
+        <div className="space-y-1 pt-2 border-t border-slate-100">
+          <label className="text-sm font-medium text-slate-700">管理者メールアドレス</label>
+          <input type="email" value={s.adminEmail || ""}
+            onChange={e => set({ adminEmail: e.target.value })}
+            placeholder="admin@example.com"
+            className="w-full text-sm px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+          <p className="text-xs text-slate-400">PIN リセット時のメール通知先。空欄の場合は Chat のみに通知されます。メール通知には別途 <code className="bg-slate-100 px-1 rounded">RESEND_API_KEY</code> の設定が必要です。</p>
+        </div>
       </Card>
       <Card className="p-6 mb-5 space-y-3">
         <div className="flex items-center gap-2">
@@ -3423,6 +3434,62 @@ function App() {
     }
   };
   const lockAdmin = () => { setPinUnlocked(false); setView("kiosk"); };
+  const [pinResetting, setPinResetting] = useState(false);
+  const [pinResetMsg, setPinResetMsg] = useState(null); // null | "chat" | "email" | "error"
+
+  // キーボードでの PIN 入力対応
+  useEffect(() => {
+    if (!showPinModal) return;
+    const handler = (e) => {
+      if (pinError) return;
+      if (e.key >= "0" && e.key <= "9") {
+        setPinInput(prev => {
+          if (prev.length >= 4) return prev;
+          const next = prev + e.key;
+          if (next.length === 4) {
+            setTimeout(() => {
+              if (next === getAdminPin()) {
+                setPinUnlocked(true); setShowPinModal(false); setView("admin"); setPinInput("");
+              } else {
+                setPinError(true);
+                setTimeout(() => { setPinError(false); setPinInput(""); }, 1000);
+              }
+            }, 0);
+          }
+          return next;
+        });
+      } else if (e.key === "Backspace") {
+        setPinInput(p => p.slice(0, -1));
+      } else if (e.key === "Escape") {
+        setShowPinModal(false); setPinInput("");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showPinModal, pinError]);
+
+  const resetPin = async () => {
+    if (pinResetting) return;
+    setPinResetting(true); setPinResetMsg(null);
+    try {
+      const res = await fetch("/api/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "pin_reset" }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPinResetMsg(data.notified_email ? "email" : "chat");
+      } else {
+        setPinResetMsg("error");
+      }
+    } catch {
+      setPinResetMsg("error");
+    } finally {
+      setPinResetting(false);
+    }
+  };
+
   const prevDBRef = useRef(null);
 
   // Supabase からデータをロード
@@ -3495,8 +3562,19 @@ function App() {
                 </button>
               ))}
             </div>
-            <button onClick={() => { setShowPinModal(false); setPinInput(""); }}
+            <button onClick={() => { setShowPinModal(false); setPinInput(""); setPinResetMsg(null); }}
               className="text-sm text-slate-400 hover:text-slate-600">キャンセル</button>
+            <div className="mt-3 border-t border-slate-100 pt-3">
+              {pinResetMsg === null && (
+                <button onClick={resetPin} disabled={pinResetting}
+                  className="text-xs text-slate-400 hover:text-sky-500 transition">
+                  {pinResetting ? "送信中..." : "PINを忘れた場合"}
+                </button>
+              )}
+              {pinResetMsg === "chat" && <p className="text-xs text-emerald-600">✅ 新しいPINをChatに送信しました</p>}
+              {pinResetMsg === "email" && <p className="text-xs text-emerald-600">✅ 新しいPINをメールに送信しました</p>}
+              {pinResetMsg === "error" && <p className="text-xs text-red-500">❌ 送信に失敗しました。管理者に連絡してください。</p>}
+            </div>
           </div>
         </div>
       )}
