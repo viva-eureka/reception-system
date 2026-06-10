@@ -331,7 +331,7 @@ function fmtDateOnly(d) {
 async function fetchData() {
   setUIState('loading');
   try {
-    allVisits = await apiFetch(`/api/visit-logs?filter=${activeFilter}&limit=200`);
+    allVisits = await apiFetch(`/api/logs?type=visit&filter=${activeFilter}&limit=200`);
     renderTable();
   } catch (err) {
     console.error('Fetch error:', err);
@@ -568,7 +568,7 @@ function auditTarget(row) {
 async function fetchAuditData() {
   setAuditUI('loading');
   try {
-    allAuditLogs = await apiFetch(`/api/audit-logs?filter=${activeAFilter}&limit=500`);
+    allAuditLogs = await apiFetch(`/api/logs?type=audit&filter=${activeAFilter}&limit=500`);
     renderAuditTable();
   } catch (err) {
     document.getElementById('audit-error-msg').textContent = err.message;
