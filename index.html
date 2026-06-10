@@ -2239,7 +2239,7 @@ function RoomsDashboard({ db }) {
             <div className="flex-1 relative h-4">
               {Array.from({length: 13}, (_, i) => i + 8).map(h => (
                 <span key={h} className="absolute text-xs text-slate-500 font-medium leading-none -translate-x-1/2"
-                  style={{ left: ((h - 8) / 12 * 100) + "%" }}>
+                  style={{ left: ((h - 8) / 12.5 * 100) + "%" }}>
                   {h}
                 </span>
               ))}
@@ -2266,12 +2266,12 @@ function RoomsDashboard({ db }) {
                 {/* 1時間ごとの縦線 */}
                 {[9,10,11,12,13,14,15,16,17,18,19].map(h => (
                   <div key={"g"+h} className="absolute top-0 bottom-0 w-px bg-slate-400/30 pointer-events-none"
-                    style={{ left: ((h - 8) / 12 * 100) + "%" }} />
+                    style={{ left: ((h - 8) / 12.5 * 100) + "%" }} />
                 ))}
                 {/* 現在時刻の縦線 */}
                 {nowH >= 8 && nowH <= 20 && (
                   <div className="absolute top-0 bottom-0 w-0.5 bg-sky-500 z-10"
-                    style={{ left: ((nowH - 8) / 12 * 100) + "%" }} />
+                    style={{ left: ((nowH - 8) / 12.5 * 100) + "%" }} />
                 )}
               </div>
             </div>
