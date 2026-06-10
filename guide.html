@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>スタートアップガイド — 受付システム</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: #f8fafc;
+    color: #1e293b;
+    line-height: 1.7;
+  }
+
+  /* ── ヘッダー ── */
+  .site-header {
+    background: #1e293b;
+    color: #fff;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .site-header .logo {
+    font-weight: 700;
+    font-size: 15px;
+    color: #fff;
+    text-decoration: none;
+    opacity: .85;
+  }
+  .site-header .sep { color: #64748b; }
+  .site-header .title { font-size: 14px; color: #94a3b8; }
+  .site-header .nav { margin-left: auto; display: flex; gap: 8px; }
+  .site-header .nav a {
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #94a3b8;
+    transition: background .15s, color .15s;
+  }
+  .site-header .nav a:hover { background: #334155; color: #fff; }
+  .site-header .nav a.active { background: #0ea5e9; color: #fff; }
+
+  /* ── レイアウト ── */
+  .layout {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  /* ── Markdown スタイル ── */
+  .markdown h1 { font-size: 1.75rem; font-weight: 700; margin: 32px 0 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+  .markdown h2 { font-size: 1.25rem; font-weight: 700; margin: 36px 0 12px; color: #0f172a; }
+  .markdown h3 { font-size: 1.05rem; font-weight: 600; margin: 24px 0 8px; color: #334155; }
+  .markdown h4 { font-size: .95rem; font-weight: 600; margin: 16px 0 6px; color: #475569; }
+  .markdown p { margin: 0 0 12px; }
+  .markdown ul, .markdown ol { padding-left: 1.5em; margin: 0 0 12px; }
+  .markdown li { margin: 4px 0; }
+  .markdown a { color: #0ea5e9; text-decoration: none; }
+  .markdown a:hover { text-decoration: underline; }
+  .markdown code {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: .875em;
+    font-family: "SFMono-Regular", Consolas, monospace;
+  }
+  .markdown pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 10px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 12px 0 16px;
+  }
+  .markdown pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: .85em;
+  }
+  .markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px;
+    font-size: .9rem;
+  }
+  .markdown th {
+    background: #f1f5f9;
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #e2e8f0;
+    font-weight: 600;
+  }
+  .markdown td {
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  .markdown tr:nth-child(even) td { background: #f8fafc; }
+  .markdown blockquote {
+    border-left: 4px solid #0ea5e9;
+    background: #f0f9ff;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 12px 0 16px;
+    color: #0369a1;
+  }
+  .markdown hr { border: none; border-top: 1px solid #e2e8f0; margin: 32px 0; }
+
+  /* チェックリスト */
+  .markdown input[type=checkbox] { margin-right: 6px; }
+
+  /* ── ローディング ── */
+  .loading { text-align: center; padding: 60px; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="logo" href="/">📋 受付システム</a>
+  <span class="sep">›</span>
+  <span class="title">ドキュメント</span>
+  <nav class="nav">
+    <a href="/guide.html" class="active">スタートアップガイド</a>
+    <a href="/help.html">ヘルプ・Q&A・Tips</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <div id="content" class="markdown">
+    <div class="loading">読み込み中…</div>
+  </div>
+</div>
+
+<script>
+fetch('/docs/startup-guide.md')
+  .then(r => r.text())
+  .then(md => {
+    document.getElementById('content').innerHTML = marked.parse(md);
+  })
+  .catch(() => {
+    document.getElementById('content').innerHTML =
+      '<p style="color:#ef4444">ドキュメントの読み込みに失敗しました。</p>';
+  });
+</script>
+</body>
+</html>
