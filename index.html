@@ -3502,7 +3502,7 @@ function App() {
   if (loading || !db) return <LoadingScreen />;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* PINモーダル */}
       {showPinModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -3544,7 +3544,7 @@ function App() {
 
       {/* 本体 */}
       {view === "kiosk" ? (
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           <Kiosk db={db} setDB={setDB} notify={notify} forceClosed={forceClosed} />
           {/* 管理画面への導線（目立たない） */}
           <button onClick={openAdmin}
