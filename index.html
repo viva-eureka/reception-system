@@ -147,6 +147,7 @@ const THEMES = {
     date: "text-amber-100/40 text-sm tracking-widest font-light",
     btn: { from:"#8a6a10", to:"#c9a030", glow:"rgba(180,140,30,.5)", shine:"shine-gold" },
     footer: "text-amber-700/40 tracking-[0.35em]",
+    divider: { line: "bg-white/15", text: "text-white/30" },
   },
   ink: {
     label: "Ink", swatch: "linear-gradient(135deg,#05080f,#0a0f1e)",
@@ -167,6 +168,7 @@ const THEMES = {
     date: "text-slate-500/50 text-sm tracking-widest font-light",
     btn: { from:"#1e293b", to:"#334155", glow:"rgba(148,163,184,.3)", shine:"shine-silver" },
     footer: "text-slate-700/50 tracking-[0.4em]",
+    divider: { line: "bg-white/15", text: "text-white/30" },
   },
   marble: {
     label: "Dark Marble", swatch: "linear-gradient(135deg,#131218,#1e1a2e)",
@@ -188,6 +190,7 @@ const THEMES = {
     date: "text-violet-200/30 text-sm tracking-widest font-light",
     btn: { from:"#4c1d95", to:"#6d28d9", glow:"rgba(139,92,246,.45)", shine:"shine-silver" },
     footer: "text-violet-800/40 tracking-[0.35em]",
+    divider: { line: "bg-white/15", text: "text-white/30" },
   },
   midnight: {
     label: "Midnight", swatch: "linear-gradient(135deg,#080e1e,#0f1f3d)",
@@ -209,6 +212,7 @@ const THEMES = {
     date: "text-slate-400/60 text-sm tracking-wide",
     btn: { from:"#0369a1", to:"#4f46e5", glow:"rgba(56,189,248,.45)", shine:"shine" },
     footer: "text-slate-600/50 tracking-widest",
+    divider: { line: "bg-white/15", text: "text-white/30" },
   },
   crimson: {
     label: "Crimson", swatch: "linear-gradient(135deg,#0d0608,#1a0508)",
@@ -230,9 +234,73 @@ const THEMES = {
     date: "text-red-200/30 text-sm tracking-widest font-light",
     btn: { from:"#7f1d1d", to:"#b91c1c", glow:"rgba(239,68,68,.45)", shine:"shine-silver" },
     footer: "text-red-900/50 tracking-[0.35em]",
+    divider: { line: "bg-white/15", text: "text-white/30" },
+  },
+  // ── ライトテーマ ──────────────────────────────────────────────
+  pearl: {
+    label: "Pearl", swatch: "linear-gradient(135deg,#e8edf5,#f0f4f9)",
+    bg: "linear-gradient(160deg,#eef2f7 0%,#e4eaf3 50%,#eef2f7 100%)",
+    blobs: [
+      { color:"rgba(99,102,241,.07)", w:500, h:400, top:-100, left:-100, spd:"35s" },
+      { color:"rgba(139,92,246,.05)", w:420, h:420, bottom:-100, right:-80, spd:"28s reverse" },
+      { color:"rgba(56,189,248,.04)", w:300, h:300, top:"40%", left:"30%", spd:"22s" },
+    ],
+    grid: "rgba(99,102,241,.025)", dots: { main:"rgba(99,102,241,.5)", red:"rgba(200,60,40,.5)" },
+    accent: "#6366f1", isLight: true,
+    greetEn: "tracking-[0.4em] text-xs text-slate-400 font-light",
+    greetJp: "text-slate-600 text-base font-light",
+    lineColor: "bg-slate-300/60",
+    divider: { line: "bg-slate-300/70", text: "text-slate-400/60" },
+    logoCard: { bg:"#fff", shadow:"0 20px 60px rgba(99,102,241,.10), 0 0 0 1px rgba(99,102,241,.08)" },
+    clock: "text-slate-700 font-thin",
+    clockSub: "text-indigo-400",
+    date: "text-slate-400 text-sm tracking-widest font-light",
+    btn: { from:"#4f46e5", to:"#6d28d9", glow:"rgba(99,102,241,.30)", shine:"shine-silver" },
+    footer: "text-slate-300/80 tracking-widest",
+  },
+  ivory: {
+    label: "Ivory", swatch: "linear-gradient(135deg,#fdf8f0,#f5edd8)",
+    bg: "linear-gradient(160deg,#fdf8f2 0%,#f8efe0 50%,#fdf8f2 100%)",
+    blobs: [
+      { color:"rgba(180,130,20,.07)", w:500, h:400, top:-100, left:-100, spd:"35s" },
+      { color:"rgba(200,150,30,.05)", w:420, h:420, bottom:-100, right:-80, spd:"28s reverse" },
+    ],
+    grid: "rgba(180,130,20,.02)", dots: { main:"rgba(180,130,20,.5)", red:"rgba(200,60,40,.5)" },
+    accent: "#b45309", isLight: true,
+    greetEn: "tracking-[0.4em] text-xs text-amber-700/50 font-light",
+    greetJp: "text-stone-600 text-base font-light",
+    lineColor: "bg-amber-300/50",
+    divider: { line: "bg-amber-200/80", text: "text-amber-600/40" },
+    logoCard: { bg:"#fffef9", shadow:"0 20px 60px rgba(180,130,20,.10), 0 0 0 1px rgba(180,130,20,.07)" },
+    clock: "text-stone-700 font-thin",
+    clockSub: "text-amber-500/70",
+    date: "text-stone-400 text-sm tracking-widest font-light",
+    btn: { from:"#92400e", to:"#b45309", glow:"rgba(180,130,20,.30)", shine:"shine-gold" },
+    footer: "text-amber-200 tracking-widest",
+  },
+  dawn: {
+    label: "Dawn", swatch: "linear-gradient(135deg,#fde8ee,#fce7f3)",
+    bg: "linear-gradient(160deg,#fef2f4 0%,#fce7f3 50%,#fef2f4 100%)",
+    blobs: [
+      { color:"rgba(244,63,94,.07)", w:500, h:400, top:-100, left:-100, spd:"30s" },
+      { color:"rgba(236,72,153,.05)", w:420, h:420, bottom:-100, right:-80, spd:"25s reverse" },
+      { color:"rgba(251,207,232,.10)", w:280, h:280, top:"35%", left:"35%", spd:"20s" },
+    ],
+    grid: "rgba(244,63,94,.02)", dots: { main:"rgba(236,72,153,.5)", red:"rgba(200,60,40,.5)" },
+    accent: "#db2777", isLight: true,
+    greetEn: "tracking-[0.4em] text-xs text-rose-400/70 font-light",
+    greetJp: "text-rose-800/60 text-base font-light",
+    lineColor: "bg-rose-300/50",
+    divider: { line: "bg-rose-200/80", text: "text-rose-400/50" },
+    logoCard: { bg:"#fff", shadow:"0 20px 60px rgba(236,72,153,.10), 0 0 0 1px rgba(236,72,153,.08)" },
+    clock: "text-rose-900/70 font-thin",
+    clockSub: "text-rose-400",
+    date: "text-rose-300 text-sm tracking-widest font-light",
+    btn: { from:"#be185d", to:"#e11d48", glow:"rgba(236,72,153,.30)", shine:"shine-silver" },
+    footer: "text-rose-200 tracking-widest",
   },
 };
-const THEME_ORDER = ["obsidian","ink","marble","midnight","crimson"];
+const THEME_ORDER = ["midnight","obsidian","ink","marble","crimson","pearl","ivory","dawn"];
 const BRAND_BLUE = "#1b4f8f";
 const BRAND_RED = "#e0402c";
 function Logo({ width = 300, customSrc = null }) {
@@ -388,6 +456,7 @@ async function loadFromSupabase() {
       receptionButtons:  receptionButtons.length ? receptionButtons : DEFAULT_BUTTONS,
       greetingMode:      "name",
       bgTheme:           kv["theme"] || "midnight",
+      standbyBgImage:    (typeof kv["standby_bg_image"] === "string" ? kv["standby_bg_image"].replace(/^"|"$/g,"") : null) || "",
       afterHoursReception: kv["allow_outside_hours"] === true || kv["allow_outside_hours"] === "true",
       chatWebhook:       kv["google_chat_webhook"] || "",
       rooms:             rooms.length ? rooms : ["会議室A", "会議室B", "応接室"],
@@ -459,6 +528,7 @@ async function syncToSupabase(next, prev) {
     const rows = [
       { key: "company_name",         value: s.companyName },
       { key: "theme",                value: s.bgTheme },
+      { key: "standby_bg_image",     value: s.standbyBgImage || "" },
       { key: "allow_outside_hours",  value: s.afterHoursReception },
       { key: "business_hours",       value: s.businessHours },
       { key: "google_chat_webhook",  value: s.chatWebhook || null },
@@ -560,6 +630,7 @@ const defaultDB = () => ({
     receptionButtons: DEFAULT_BUTTONS,
     greetingMode: "name",
     bgTheme: "obsidian",
+    standbyBgImage: "",
     afterHoursReception: false,
     chatWebhook: "https://chat.googleapis.com/v1/spaces/AAAA.../messages?key=...（デモ）",
     rooms: ["会議室A", "会議室B", "応接室"],
@@ -1197,7 +1268,7 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
   if (screen === "standby") {
     const th = THEMES[db.settings.bgTheme || "obsidian"];
     return (
-      <KioskShell bg={th.bg}>
+      <KioskShell bg={th.bg} bgImage={db.settings.standbyBgImage || ""}>
         <StandbyDecor theme={th} />
         <div className="relative z-10 flex-1 flex flex-col md:flex-row items-center justify-center cursor-pointer select-none" onClick={() => setScreen("menu")}>
           {/* 上/左カラム: あいさつ + ロゴ */}
@@ -1238,9 +1309,9 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
             {getApiKey() ? (
               <>
                 <div className="fadeup-4 flex items-center gap-3 mt-5 w-72">
-                  <span className="flex-1 h-px bg-white/15" />
-                  <span className="text-white/30 text-xs tracking-widest">または</span>
-                  <span className="flex-1 h-px bg-white/15" />
+                  <span className={"flex-1 h-px " + (th.divider ? th.divider.line : "bg-white/15")} />
+                  <span className={"text-xs tracking-widest " + (th.divider ? th.divider.text : "text-white/30")}>または</span>
+                  <span className={"flex-1 h-px " + (th.divider ? th.divider.line : "bg-white/15")} />
                 </div>
                 <button onClick={e => { e.stopPropagation(); setVoiceStep("idle"); setScreen("voice"); }}
                   className="fadeup-4 voice-btn mt-3 group relative overflow-hidden rounded-2xl px-7 py-4 active:scale-95 transition-transform"
@@ -1821,7 +1892,18 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
   return null;
 }
 
-function KioskShell({ children, onClick, bg }) {
+function KioskShell({ children, onClick, bg, bgImage }) {
+  if (bgImage) {
+    return (
+      <div onClick={onClick}
+        className="relative w-full h-full flex flex-col overflow-hidden"
+        style={{ backgroundImage: `url(${bgImage})`, backgroundSize: "cover", backgroundPosition: "center" }}>
+        {/* テーマグラデーションをオーバーレイ */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: bg, opacity: 0.62 }} />
+        {children}
+      </div>
+    );
+  }
   return (
     <div onClick={onClick}
       className="relative w-full h-full flex flex-col overflow-hidden"
@@ -3103,20 +3185,69 @@ function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
       <h1 className="text-2xl font-bold text-slate-800 mb-6">設定</h1>
       <Card className="p-6 mb-5 space-y-4">
         <h2 className="font-bold text-slate-700">待ち受け画面テーマ</h2>
-        <div className="grid grid-cols-5 gap-3">
-          {THEME_ORDER.map(k => {
+        {/* ── ダークテーマ ── */}
+        <p className="text-xs text-slate-400 font-semibold uppercase tracking-widest">ダーク</p>
+        <div className="grid grid-cols-5 gap-2">
+          {["midnight","obsidian","ink","marble","crimson"].map(k => {
             const t = THEMES[k];
             const active = (s.bgTheme || "obsidian") === k;
             return (
               <button key={k} onClick={() => set({ bgTheme: k })}
-                className={"rounded-xl overflow-hidden border-2 transition " + (active ? "border-slate-800 ring-2 ring-slate-400" : "border-slate-200 hover:border-slate-400")}>
-                <div className="h-16 w-full" style={{ background: t.bg }} />
-                <div className={"text-xs py-1.5 text-center font-medium " + (active ? "bg-slate-800 text-white" : "bg-slate-50 text-slate-600")}>
+                className={"rounded-xl overflow-hidden border-2 transition " + (active ? "border-slate-700 ring-2 ring-slate-400" : "border-slate-200 hover:border-slate-400")}>
+                <div className="h-14 w-full" style={{ background: t.bg }} />
+                <div className={"text-xs py-1 text-center font-medium " + (active ? "bg-slate-700 text-white" : "bg-slate-50 text-slate-600")}>
                   {t.label}
                 </div>
               </button>
             );
           })}
+        </div>
+        {/* ── ライトテーマ ── */}
+        <p className="text-xs text-slate-400 font-semibold uppercase tracking-widest pt-1">ライト</p>
+        <div className="grid grid-cols-3 gap-2">
+          {["pearl","ivory","dawn"].map(k => {
+            const t = THEMES[k];
+            const active = (s.bgTheme || "obsidian") === k;
+            return (
+              <button key={k} onClick={() => set({ bgTheme: k })}
+                className={"rounded-xl overflow-hidden border-2 transition " + (active ? "border-slate-500 ring-2 ring-slate-300" : "border-slate-200 hover:border-slate-400")}>
+                <div className="h-14 w-full" style={{ background: t.bg }} />
+                <div className={"text-xs py-1 text-center font-medium " + (active ? "bg-slate-500 text-white" : "bg-slate-50 text-slate-600")}>
+                  {t.label}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {/* ── 背景画像 ── */}
+        <div className="pt-3 border-t border-slate-100 space-y-2">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-700">背景画像（オプション）</p>
+              <p className="text-xs text-slate-400 mt-0.5">テーマのグラデーションを重ねて表示します。JPG / PNG 推奨。</p>
+            </div>
+            {s.standbyBgImage && (
+              <button onClick={() => set({ standbyBgImage: "" })}
+                className="text-xs text-red-400 hover:text-red-600 transition ml-4 shrink-0">削除</button>
+            )}
+          </div>
+          {s.standbyBgImage ? (
+            <img src={s.standbyBgImage} alt="背景プレビュー"
+              className="h-24 w-full object-cover rounded-xl border border-slate-200" />
+          ) : (
+            <label className="flex items-center justify-center gap-2 h-16 rounded-xl border-2 border-dashed border-slate-200 cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition text-sm text-slate-500">
+              <span className="text-lg">🖼️</span>
+              <span>クリックして画像をアップロード</span>
+              <input type="file" className="hidden" accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = ev => set({ standbyBgImage: ev.target.result });
+                  reader.readAsDataURL(file);
+                }} />
+            </label>
+          )}
         </div>
       </Card>
       <Card className="p-6 mb-5 space-y-4">
