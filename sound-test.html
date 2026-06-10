@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>チャイム サンプル</title>
+<style>
+  body { font-family: -apple-system, sans-serif; display: flex; align-items: center;
+         justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; }
+  .card { background: white; border-radius: 20px; padding: 40px 48px; text-align: center;
+          box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+  h2 { color: #1e293b; margin-bottom: 8px; }
+  p  { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+  button {
+    background: linear-gradient(135deg, #38bdf8, #6366f1);
+    color: white; border: none; border-radius: 14px;
+    padding: 16px 40px; font-size: 20px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(99,102,241,.35);
+    transition: transform .12s, box-shadow .12s;
+  }
+  button:active { transform: scale(.96); box-shadow: 0 2px 8px rgba(99,102,241,.25); }
+  .note { color: #94a3b8; font-size: 13px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>🔔 ソフトチャイム（C案）</h2>
+  <p>ド → ミ → ソ の 3音チャイム</p>
+  <button onclick="playChime()">▶ 再生</button>
+  <div class="note">※ボタンを押すと音が鳴ります</div>
+</div>
+
+<script>
+function playChime() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // ド(C5) → ミ(E5) → ソ(G5)
+  const notes = [
+    { freq: 523.25, start: 0.0  },
+    { freq: 659.25, start: 0.28 },
+    { freq: 783.99, start: 0.56 },
+  ];
+
+  notes.forEach(({ freq, start }) => {
+    // 基音
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    // 倍音（金属感を出す）
+    const osc2  = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+
+    osc.type  = "sine";
+    osc2.type = "sine";
+    osc.frequency.value  = freq;
+    osc2.frequency.value = freq * 2.756; // 非整数倍音でベル感
+
+    const t = ctx.currentTime + start;
+
+    // 基音エンベロープ
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.45, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+
+    // 倍音エンベロープ（速く消える）
+    gain2.gain.setValueAtTime(0, t);
+    gain2.gain.linearRampToValueAtTime(0.12, t + 0.008);
+    gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+
+    osc.connect(gain);   gain.connect(ctx.destination);
+    osc2.connect(gain2); gain2.connect(ctx.destination);
+
+    osc.start(t);  osc.stop(t + 1.5);
+    osc2.start(t); osc2.stop(t + 1.5);
+  });
+}
+</script>
+</body>
+</html>

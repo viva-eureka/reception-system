@@ -98,7 +98,7 @@ function onCalendarEventUpdated(e) {
         var visitorName = guest.displayName || guest.email.split("@")[0];
         var companyName = guessCompanyFromEmail(guest.email);
 
-        var result = createReceptionInvitation({
+        var inv = createReceptionInvitation({
           visitor_name: visitorName,
           company_name: companyName,
           host_name:    hostName,
@@ -109,7 +109,7 @@ function onCalendarEventUpdated(e) {
           source:       "calendar",      // APIのチャット通知でカレンダー由来と判定
         });
 
-        if (result) {
+        if (inv) {
           Logger.log("✅ 招待作成: " + visitorName + " (" + visitDate + ")");
         }
       }

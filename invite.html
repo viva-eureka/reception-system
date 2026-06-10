@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ご来社のご案内</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+  background:linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%);
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;border-radius:20px;padding:32px 24px;
+  box-shadow:0 8px 32px rgba(0,0,0,.10);max-width:360px;width:100%;text-align:center}
+.logo{font-size:13px;color:#94a3b8;margin-bottom:20px;letter-spacing:.05em;text-align:center}
+h1{font-size:20px;font-weight:700;color:#1e293b;margin-bottom:6px}
+.sub{font-size:14px;color:#64748b;margin-bottom:24px}
+.info{background:#f8fafc;border-radius:12px;padding:16px;margin-bottom:24px;text-align:left}
+.info-row{display:flex;gap:8px;font-size:14px;padding:4px 0}
+.info-label{color:#94a3b8;min-width:56px;flex-shrink:0}
+.info-val{color:#1e293b;font-weight:500}
+.qr-wrap{background:#f8fafc;border-radius:16px;padding:20px;margin-bottom:16px}
+.qr-wrap img{display:block;margin:0 auto;border-radius:8px}
+.qr-note{font-size:13px;color:#64748b;margin-top:12px;line-height:1.6}
+.footer{font-size:12px;color:#cbd5e1;margin-top:20px}
+.spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:#3b82f6;
+  border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{color:#ef4444;font-size:15px;padding:24px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo" id="logo-area">
+    <img id="logo-img" src="" alt="" style="display:none;max-height:48px;max-width:160px;object-fit:contain;margin:0 auto 4px"/>
+    <span id="logo-text">株式会社ユリーカ 受付システム</span>
+  </div>
+  <div id="loading"><div class="spinner"></div></div>
+  <div id="content" style="display:none">
+    <h1 id="visitor-name"></h1>
+    <div class="sub">様　ご来社のご案内</div>
+    <div class="info" id="info-box"></div>
+    <div class="qr-wrap">
+      <img id="qr-img" width="220" height="220" alt="受付QRコード"/>
+      <p class="qr-note">受付端末のカメラにこの画面を<br>かざしてください</p>
+    </div>
+  </div>
+  <div id="error" class="error" style="display:none"></div>
+  <div id="company-info" style="display:none;background:#f8fafc;border-radius:12px;padding:14px;margin-top:8px;text-align:left;font-size:13px;color:#475569;line-height:1.8">
+    <div style="font-weight:600;color:#1e293b;margin-bottom:4px">株式会社ユリーカ</div>
+    <div id="company-address"></div>
+    <div id="company-phone"></div>
+  </div>
+  <div class="footer">このページは来社当日にご提示ください</div>
+</div>
+
+<script>
+async function load() {
+  const token = new URLSearchParams(location.search).get("token");
+  if (!token) { showError("招待トークンが見つかりません"); return; }
+
+  try {
+    // Supabase 直接ではなく同一オリジンの API 経由で取得（CORS 回避）
+    const res = await fetch(`/api/invitation?token=${encodeURIComponent(token)}`);
+    const body = await res.json();
+    if (!res.ok) {
+      showError("データ取得エラー " + res.status + ": " + (body?.error || JSON.stringify(body)));
+      return;
+    }
+    const inv = body;
+
+    document.getElementById("visitor-name").textContent = inv.visitor_name;
+
+    const infoRows = [
+      inv.visit_date ? ["日時", fmt(inv.visit_date, inv.visit_time)] : null,
+      inv.company_name ? ["会社", inv.company_name] : null,
+      inv.host_name ? ["担当", inv.host_name] : null,
+      inv.room ? ["会議室", inv.room] : null,
+    ].filter(Boolean);
+
+    // ロゴ
+    if (inv.company_logo) {
+      const img = document.getElementById("logo-img");
+      img.src = inv.company_logo;
+      img.style.display = "block";
+      document.getElementById("logo-text").style.display = "none";
+    }
+
+    // 会社情報（住所・電話）
+    if (inv.company_address || inv.company_phone) {
+      const addrEl = document.getElementById("company-info");
+      addrEl.style.display = "block";
+      if (inv.company_address) document.getElementById("company-address").textContent = inv.company_address;
+      if (inv.company_phone)   document.getElementById("company-phone").innerHTML =
+        `<a href="tel:${inv.company_phone}" style="color:#3b82f6">${inv.company_phone}</a>`;
+    }
+
+    document.getElementById("info-box").innerHTML = infoRows
+      .map(([l,v]) => `<div class="info-row"><span class="info-label">${l}</span><span class="info-val">${v}</span></div>`)
+      .join("");
+
+    const qrData = encodeURIComponent(token);
+    document.getElementById("qr-img").src =
+      `https://api.qrserver.com/v1/create-qr-code/?size=440x440&data=${qrData}&margin=10`;
+
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("content").style.display = "block";
+  } catch(e) {
+    showError("読み込みエラー: " + e.message);
+  }
+}
+
+function fmt(date, time) {
+  if (!date) return "";
+  const [y,m,d] = date.split("-");
+  const base = `${y}年${m}月${d}日`;
+  return time ? `${base} ${time}` : base;
+}
+
+function showError(msg) {
+  document.getElementById("loading").style.display = "none";
+  const el = document.getElementById("error");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
+load();
+</script>
+</body>
+</html>
