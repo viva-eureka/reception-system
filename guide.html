@@ -49,12 +49,46 @@
   .site-header .nav a:hover { background: #334155; color: #fff; }
   .site-header .nav a.active { background: #0ea5e9; color: #fff; }
 
+  /* ── タブ切り替え ── */
+  .tab-bar {
+    max-width: 900px;
+    margin: 24px auto 0;
+    padding: 0 24px;
+    display: flex;
+    gap: 8px;
+  }
+  .tab-btn {
+    padding: 8px 20px;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid #e2e8f0;
+    border-bottom: none;
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .tab-btn:hover { background: #e2e8f0; color: #334155; }
+  .tab-btn.active {
+    background: #fff;
+    color: #0ea5e9;
+    border-color: #e2e8f0;
+    border-bottom-color: #fff;
+    position: relative;
+    z-index: 1;
+  }
+
   /* ── レイアウト ── */
   .layout {
     max-width: 900px;
     margin: 0 auto;
-    padding: 32px 24px 80px;
+    padding: 0 24px 80px;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 0 8px 8px 8px;
   }
+  .layout-inner { padding-top: 32px; }
 
   /* ── Markdown スタイル ── */
   .markdown h1 { font-size: 1.75rem; font-weight: 700; margin: 32px 0 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
@@ -137,22 +171,51 @@
   </nav>
 </header>
 
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('user')" id="tab-user">👤 利用者向け</button>
+  <button class="tab-btn" onclick="switchTab('admin')" id="tab-admin">🔧 管理者向け（IT担当）</button>
+</div>
+
 <div class="layout">
-  <div id="content" class="markdown">
-    <div class="loading">読み込み中…</div>
+  <div class="layout-inner">
+    <div id="content" class="markdown">
+      <div class="loading">読み込み中…</div>
+    </div>
   </div>
 </div>
 
 <script>
-fetch('/docs/startup-guide.md')
-  .then(r => r.text())
-  .then(md => {
-    document.getElementById('content').innerHTML = marked.parse(md);
-  })
-  .catch(() => {
-    document.getElementById('content').innerHTML =
-      '<p style="color:#ef4444">ドキュメントの読み込みに失敗しました。</p>';
-  });
+const GUIDES = {
+  user:  '/docs/startup-guide-user.md',
+  admin: '/docs/startup-guide-admin.md',
+};
+const cache = {};
+
+function switchTab(type) {
+  document.getElementById('tab-user').classList.toggle('active', type === 'user');
+  document.getElementById('tab-admin').classList.toggle('active', type === 'admin');
+  loadGuide(type);
+  history.replaceState(null, '', '?tab=' + type);
+}
+
+function loadGuide(type) {
+  const el = document.getElementById('content');
+  if (cache[type]) { el.innerHTML = cache[type]; return; }
+  el.innerHTML = '<div class="loading">読み込み中…</div>';
+  fetch(GUIDES[type])
+    .then(r => r.text())
+    .then(md => {
+      cache[type] = marked.parse(md);
+      el.innerHTML = cache[type];
+    })
+    .catch(() => {
+      el.innerHTML = '<p style="color:#ef4444">ドキュメントの読み込みに失敗しました。</p>';
+    });
+}
+
+// 初期タブ: URL パラメータ or デフォルト利用者向け
+const initTab = new URLSearchParams(location.search).get('tab') || 'user';
+switchTab(initTab);
 </script>
 </body>
 </html>
