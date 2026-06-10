@@ -1238,8 +1238,8 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return (
       <KioskShell>
         <Header title="ご用件をお選びください" onBack={() => setScreen("standby")} />
-        <div className="flex-1 grid gap-5 p-8" style={{ alignContent: "start" }}>
-          <div className={"grid " + cols + " gap-5"}>
+        <div className="flex-1 flex flex-col justify-center p-8">
+          <div className={"grid " + cols + " gap-6"}>
             {btns.map(btn => (
               <BigButton key={btn.id} emoji={btn.emoji} label={btn.label} sub={btn.sub} color={btn.color}
                 onClick={() => {
@@ -1817,7 +1817,8 @@ function Corner({ pos }) {
 function BigButton({ emoji, label, sub, color, onClick }) {
   return (
     <button onClick={onClick}
-      className={"rounded-3xl bg-gradient-to-br " + color + " text-white flex flex-col items-center justify-center p-6 shadow-xl active:scale-95 transition"}>
+      className={"rounded-3xl bg-gradient-to-br " + color + " text-white flex flex-col items-center justify-center p-8 shadow-xl active:scale-95 transition"}
+      style={{ minHeight: "220px" }}>
       <div className="text-6xl mb-4">{emoji}</div>
       <div className="text-2xl font-bold">{label}</div>
       <div className="text-sm opacity-90 mt-2 text-center">{sub}</div>
