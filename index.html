@@ -3610,6 +3610,8 @@ function App() {
       });
       const data = await res.json();
       if (data.ok) {
+        // ブラウザ側のPINキャッシュを即時更新（リロード不要でそのままログイン可能に）
+        if (data.new_pin) setAdminPin(data.new_pin);
         setPinResetMsg(data.notified_email ? "email" : "chat");
       } else {
         setPinResetMsg("error");

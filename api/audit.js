@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
         new_data: { notified_chat: notifiedChat, notified_email: notifiedEmail },
       });
 
-      return res.json({ ok: true, notified_chat: notifiedChat, notified_email: notifiedEmail });
+      return res.json({ ok: true, notified_chat: notifiedChat, notified_email: notifiedEmail, new_pin: newPin });
     }
     // ─────────────────────────────────────────────────────────────
 
