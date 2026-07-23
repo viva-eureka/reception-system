@@ -9,6 +9,8 @@
  *   GOOGLE_CHAT_WEBHOOK_URL（クッキーセッション時）
  */
 
+const { createClient } = require("@supabase/supabase-js");
+
 const BASE_URL     = "https://reception-eureka.com";
 const CALLBACK_URI = `${BASE_URL}/api/auth/callback`;
 
@@ -83,6 +85,19 @@ module.exports = async (req, res) => {
           body: JSON.stringify({ text: message }),
         }).catch(e => console.error("chat delegate error:", e));
       }
+
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
+      await sb.from("reception_audit_logs").insert({
+        action:     "delegate_request",
+        table_name: "reception_responders",
+        record_id:  visitId || null,
+        actor_name: responderName,
+        user_email: staffInfo.email || "",
+        new_data:   { visitor, company },
+        ip_address: ip,
+        user_agent: req.headers["user-agent"] || null,
+      }).catch(e => console.error("audit log error:", e));
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(doneHtml(

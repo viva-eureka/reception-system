@@ -83,6 +83,18 @@ module.exports = async (req, res) => {
         response_type:   "handling",
       });
 
+      const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
+      await sb.from("reception_audit_logs").insert({
+        action:     "handle_response",
+        table_name: "reception_responders",
+        record_id:  visitId || null,
+        actor_name: responderName,
+        user_email: responderEmail,
+        new_data:   { visitor, company },
+        ip_address: ip,
+        user_agent: req.headers["user-agent"] || null,
+      }).catch(e => console.error("audit log error:", e));
+
       const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
       if (webhookUrl && visitor) {
         await fetch(webhookUrl, {
