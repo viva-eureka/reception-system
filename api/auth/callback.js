@@ -200,19 +200,21 @@ module.exports = async (req, res) => {
   if (action === "delegate") {
     // 同じ来訪への重複依頼通知を防ぐ
     let alreadyDelegated = false;
-    if (visitId) {
-      const sbCheck = createClient(
-        process.env.SUPABASE_URL,
-        process.env.SUPABASE_SERVICE_ROLE_KEY
-      );
-      const { data } = await sbCheck.from("reception_audit_logs")
-        .select("id")
-        .eq("action", "delegate_request")
-        .eq("record_id", visitId)
-        .limit(1)
-        .maybeSingle()
-        .catch(() => ({ data: null }));
-      alreadyDelegated = !!data;
+    try {
+      if (visitId) {
+        const sbCheck = createClient(
+          process.env.SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY
+        );
+        const { data: rows } = await sbCheck.from("reception_audit_logs")
+          .select("id")
+          .eq("action", "delegate_request")
+          .eq("record_id", visitId)
+          .limit(1);
+        alreadyDelegated = !!(rows && rows.length > 0);
+      }
+    } catch (e) {
+      console.error("delegate dedup check error:", e);
     }
 
     if (!alreadyDelegated && webhookUrl) {

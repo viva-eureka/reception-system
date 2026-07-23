@@ -78,15 +78,17 @@ module.exports = async (req, res) => {
 
       // 同じ来訪への重複依頼通知を防ぐ
       let alreadyDelegated = false;
-      if (visitId) {
-        const { data } = await sb.from("reception_audit_logs")
-          .select("id")
-          .eq("action", "delegate_request")
-          .eq("record_id", visitId)
-          .limit(1)
-          .maybeSingle()
-          .catch(() => ({ data: null }));
-        alreadyDelegated = !!data;
+      try {
+        if (visitId) {
+          const { data: rows } = await sb.from("reception_audit_logs")
+            .select("id")
+            .eq("action", "delegate_request")
+            .eq("record_id", visitId)
+            .limit(1);
+          alreadyDelegated = !!(rows && rows.length > 0);
+        }
+      } catch (e) {
+        console.error("delegate dedup check error:", e);
       }
 
       const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
