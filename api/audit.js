@@ -14,14 +14,24 @@
 
 const { createClient } = require("@supabase/supabase-js");
 
-function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+const ALLOWED_ORIGINS = [
+  "https://reception-eureka.com",
+  "https://www.reception-eureka.com",
+  "https://reception-system-five.vercel.app",
+  "http://localhost:3000",
+];
+
+function cors(req, res) {
+  const origin = req.headers.origin || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  res.setHeader("Access-Control-Allow-Origin", allowed);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
 }
 
 module.exports = async (req, res) => {
-  cors(res);
+  cors(req, res);
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
 
@@ -62,9 +72,9 @@ module.exports = async (req, res) => {
         .upsert({ key: "admin_pin", value: newPin }, { onConflict: "key" });
       if (updateErr) return res.status(500).json({ error: updateErr.message });
 
-      // Chat Webhook URL を設定から取得（notify.js と同じキー名 webhook_url を使用）
+      // Chat Webhook URL を設定から取得
       const { data: wRow } = await sb.from("reception_settings")
-        .select("value").eq("key", "webhook_url").maybeSingle();
+        .select("value").eq("key", "google_chat_webhook").maybeSingle();
       const rawUrl = wRow?.value;
       const webhookUrl = (typeof rawUrl === "string" ? rawUrl.replace(/^"|"$/g, "") : rawUrl)
         || process.env.GOOGLE_CHAT_WEBHOOK_URL;
@@ -114,7 +124,7 @@ module.exports = async (req, res) => {
         new_data: { notified_chat: notifiedChat, notified_email: notifiedEmail },
       });
 
-      return res.json({ ok: true, notified_chat: notifiedChat, notified_email: notifiedEmail, new_pin: newPin });
+      return res.json({ ok: true, notified_chat: notifiedChat, notified_email: notifiedEmail });
     }
     // ─────────────────────────────────────────────────────────────
 

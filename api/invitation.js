@@ -114,8 +114,8 @@ module.exports = async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
 
     // ── Chat 通知（設定から webhook_url を読む） ──
-    const settings = await getSettings("webhook_url");
-    const webhookUrl = settings.webhook_url || process.env.GOOGLE_CHAT_WEBHOOK_URL;
+    const settings = await getSettings("google_chat_webhook");
+    const webhookUrl = settings.google_chat_webhook || process.env.GOOGLE_CHAT_WEBHOOK_URL;
     if (webhookUrl && data) {
       const label      = company_name ? `${visitor_name}（${company_name}）` : visitor_name;
       const inviteUrl  = `${BASE_URL}/invite.html?token=${encodeURIComponent(data.qr_token)}`;

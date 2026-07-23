@@ -162,7 +162,7 @@ async function getWebhookUrl() {
     const { data } = await sb
       .from("reception_settings")
       .select("value")
-      .eq("key", "webhook_url")
+      .eq("key", "google_chat_webhook")
       .maybeSingle();
     const url = data?.value?.replace(/^"|"$/g, ""); // jsonb の文字列値をアンクォート
     if (url && url.startsWith("https://")) return url;
@@ -242,7 +242,7 @@ module.exports = async (req, res) => {
             },
           }],
         };
-        fetch(staffWebhook, {
+        await fetch(staffWebhook, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(personalCard),
