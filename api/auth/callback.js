@@ -124,6 +124,12 @@ module.exports = async (req, res) => {
     return res.status(403).send(errHtml("社外のGoogleアカウントでは操作できません。<br>会社アカウント（@viva-eureka.co.jp）でログインしてください。"));
   }
 
+  // 30日間有効なセッションクッキーを設定（次回以降のOAuthをスキップ）
+  const staffCookieVal = Buffer.from(JSON.stringify({ name: responderName, email: responderEmail })).toString("base64url");
+  res.setHeader("Set-Cookie",
+    `reception_staff=${staffCookieVal}; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/`
+  );
+
   const { action, visitId, visitor, company } = stateObj;
   const subtitle = company ? `${visitor}（${company}）` : (visitor || "");
   const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
