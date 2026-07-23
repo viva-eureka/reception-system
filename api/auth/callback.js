@@ -198,11 +198,27 @@ module.exports = async (req, res) => {
 
   /* ── 他の人に依頼 ── */
   if (action === "delegate") {
-    const message = subtitle
-      ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
-      : `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n（by ${responderName}）`;
+    // 同じ来訪への重複依頼通知を防ぐ
+    let alreadyDelegated = false;
+    if (visitId) {
+      const sbCheck = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+      const { data } = await sbCheck.from("reception_audit_logs")
+        .select("id")
+        .eq("action", "delegate_request")
+        .eq("record_id", visitId)
+        .limit(1)
+        .maybeSingle()
+        .catch(() => ({ data: null }));
+      alreadyDelegated = !!data;
+    }
 
-    if (webhookUrl) {
+    if (!alreadyDelegated && webhookUrl) {
+      const message = subtitle
+        ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
+        : `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n（by ${responderName}）`;
       try {
         await fetch(webhookUrl, {
           method: "POST",
@@ -217,7 +233,9 @@ module.exports = async (req, res) => {
     await auditLog("delegate_request");
     return res.send(doneHtml(
       "📨",
-      `スペースに依頼メッセージを送りました。<br><b>${responderName}</b> さん、少々お待ちください。`,
+      alreadyDelegated
+        ? `依頼は既にスペースへ送信済みです。<br><b>${responderName}</b> さん、少々お待ちください。`
+        : `スペースに依頼メッセージを送りました。<br><b>${responderName}</b> さん、少々お待ちください。`,
       "#fef9ec"
     ));
   }

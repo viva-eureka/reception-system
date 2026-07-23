@@ -73,12 +73,27 @@ module.exports = async (req, res) => {
       const staffInfo = JSON.parse(Buffer.from(cookies.reception_staff, "base64url").toString());
       const responderName  = staffInfo.name  || staffInfo.email || "不明";
 
-      const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
-      const message = subtitle
-        ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
-        : `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n（by ${responderName}）`;
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+      const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
 
-      if (webhookUrl) {
+      // 同じ来訪への重複依頼通知を防ぐ
+      let alreadyDelegated = false;
+      if (visitId) {
+        const { data } = await sb.from("reception_audit_logs")
+          .select("id")
+          .eq("action", "delegate_request")
+          .eq("record_id", visitId)
+          .limit(1)
+          .maybeSingle()
+          .catch(() => ({ data: null }));
+        alreadyDelegated = !!data;
+      }
+
+      const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
+      if (!alreadyDelegated && webhookUrl) {
+        const message = subtitle
+          ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
+          : `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n（by ${responderName}）`;
         await fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -86,15 +101,13 @@ module.exports = async (req, res) => {
         }).catch(e => console.error("chat delegate error:", e));
       }
 
-      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-      const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
       await sb.from("reception_audit_logs").insert({
         action:     "delegate_request",
         table_name: "reception_responders",
         record_id:  visitId || null,
         actor_name: responderName,
         user_email: staffInfo.email || "",
-        new_data:   { visitor, company },
+        new_data:   { visitor, company, duplicate: alreadyDelegated },
         ip_address: ip,
         user_agent: req.headers["user-agent"] || null,
       }).catch(e => console.error("audit log error:", e));
@@ -102,7 +115,9 @@ module.exports = async (req, res) => {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(doneHtml(
         "📨",
-        `スペースに依頼メッセージを送りました。<br><b>${responderName}</b> さん、少々お待ちください。`,
+        alreadyDelegated
+          ? `依頼は既にスペースへ送信済みです。<br><b>${responderName}</b> さん、少々お待ちください。`
+          : `スペースに依頼メッセージを送りました。<br><b>${responderName}</b> さん、少々お待ちください。`,
         "#fef9ec"
       ));
     } catch (e) {
