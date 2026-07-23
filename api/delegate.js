@@ -77,21 +77,27 @@ module.exports = async (req, res) => {
       const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
 
       // 監査ログを先に書く（DB の UNIQUE 制約が競合を原子的に防ぐ）
-      const { data: logRows } = await sb.from("reception_audit_logs").insert({
-        action:     "delegate_request",
-        table_name: "reception_responders",
-        record_id:  visitId || null,
-        actor_name: responderName,
-        user_email: staffInfo.email || "",
-        new_data:   { visitor, company },
-        ip_address: ip,
-        user_agent: req.headers["user-agent"] || null,
-      }, { ignoreDuplicates: true }).select("id").catch(e => {
-        console.error("audit log insert error:", e);
-        return { data: null };
-      });
-
-      const isFirst = !!(logRows && logRows.length > 0);
+      let isFirst = false;
+      try {
+        const { data: logRows, error: logErr } = await sb.from("reception_audit_logs").insert({
+          action:     "delegate_request",
+          table_name: "reception_responders",
+          record_id:  visitId || null,
+          actor_name: responderName,
+          user_email: staffInfo.email || "",
+          new_data:   { visitor, company },
+          ip_address: ip,
+          user_agent: req.headers["user-agent"] || null,
+        }).select("id");
+        if (!logErr) {
+          isFirst = !!(logRows && logRows.length > 0);
+        } else if (logErr.code !== "23505") {
+          // 23505 = unique violation（重複） → isFirst=false のまま
+          console.error("audit log insert error:", logErr);
+        }
+      } catch (e) {
+        console.error("audit log insert exception:", e);
+      }
       const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
       if (isFirst && webhookUrl) {
         const message = subtitle

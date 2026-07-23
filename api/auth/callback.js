@@ -201,21 +201,27 @@ module.exports = async (req, res) => {
     // 監査ログを先に書く（DB の UNIQUE 制約が競合を原子的に防ぐ）
     const sbDel = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
     const ipDel = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
-    const { data: logRows } = await sbDel.from("reception_audit_logs").insert({
-      action:     "delegate_request",
-      table_name: "reception_responders",
-      record_id:  visitId || null,
-      actor_name: responderName,
-      user_email: responderEmail,
-      new_data:   { visitor, company },
-      ip_address: ipDel,
-      user_agent: req.headers["user-agent"] || null,
-    }, { ignoreDuplicates: true }).select("id").catch(e => {
-      console.error("audit log insert error:", e);
-      return { data: null };
-    });
-
-    const isFirst = !!(logRows && logRows.length > 0);
+    let isFirst = false;
+    try {
+      const { data: logRows, error: logErr } = await sbDel.from("reception_audit_logs").insert({
+        action:     "delegate_request",
+        table_name: "reception_responders",
+        record_id:  visitId || null,
+        actor_name: responderName,
+        user_email: responderEmail,
+        new_data:   { visitor, company },
+        ip_address: ipDel,
+        user_agent: req.headers["user-agent"] || null,
+      }).select("id");
+      if (!logErr) {
+        isFirst = !!(logRows && logRows.length > 0);
+      } else if (logErr.code !== "23505") {
+        // 23505 = unique violation（重複） → isFirst=false のまま
+        console.error("audit log insert error:", logErr);
+      }
+    } catch (e) {
+      console.error("audit log insert exception:", e);
+    }
     if (isFirst && webhookUrl) {
       const message = subtitle
         ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
