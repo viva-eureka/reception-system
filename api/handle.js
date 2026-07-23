@@ -76,15 +76,16 @@ module.exports = async (req, res) => {
       const responderEmail = staffInfo.email || "";
 
       const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-      await sb.from("reception_responders").insert({
+      const { error: respErr } = await sb.from("reception_responders").insert({
         visit_id:        visitId || null,
         responder_name:  responderName,
         responder_email: responderEmail,
         response_type:   "handling",
-      }).catch(e => console.error("responder insert error:", e));
+      });
+      if (respErr) console.error("responder insert error:", respErr);
 
       const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
-      await sb.from("reception_audit_logs").insert({
+      const { error: auditErr } = await sb.from("reception_audit_logs").insert({
         action:     "handle_response",
         table_name: "reception_responders",
         record_id:  visitId || null,
@@ -93,7 +94,8 @@ module.exports = async (req, res) => {
         new_data:   { visitor, company },
         ip_address: ip,
         user_agent: req.headers["user-agent"] || null,
-      }).catch(e => console.error("audit log error:", e));
+      });
+      if (auditErr) console.error("audit log error:", auditErr);
 
       const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
       if (webhookUrl && visitor) {
