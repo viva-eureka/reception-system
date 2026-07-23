@@ -198,26 +198,25 @@ module.exports = async (req, res) => {
 
   /* ── 他の人に依頼 ── */
   if (action === "delegate") {
-    // 同じ来訪への重複依頼通知を防ぐ
-    let alreadyDelegated = false;
-    try {
-      if (visitId) {
-        const sbCheck = createClient(
-          process.env.SUPABASE_URL,
-          process.env.SUPABASE_SERVICE_ROLE_KEY
-        );
-        const { data: rows } = await sbCheck.from("reception_audit_logs")
-          .select("id")
-          .eq("action", "delegate_request")
-          .eq("record_id", visitId)
-          .limit(1);
-        alreadyDelegated = !!(rows && rows.length > 0);
-      }
-    } catch (e) {
-      console.error("delegate dedup check error:", e);
-    }
+    // 監査ログを先に書く（DB の UNIQUE 制約が競合を原子的に防ぐ）
+    const sbDel = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const ipDel = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
+    const { data: logRows } = await sbDel.from("reception_audit_logs").insert({
+      action:     "delegate_request",
+      table_name: "reception_responders",
+      record_id:  visitId || null,
+      actor_name: responderName,
+      user_email: responderEmail,
+      new_data:   { visitor, company },
+      ip_address: ipDel,
+      user_agent: req.headers["user-agent"] || null,
+    }, { ignoreDuplicates: true }).select("id").catch(e => {
+      console.error("audit log insert error:", e);
+      return { data: null };
+    });
 
-    if (!alreadyDelegated && webhookUrl) {
+    const isFirst = !!(logRows && logRows.length > 0);
+    if (isFirst && webhookUrl) {
       const message = subtitle
         ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
         : `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n（by ${responderName}）`;
@@ -232,12 +231,11 @@ module.exports = async (req, res) => {
       }
     }
 
-    await auditLog("delegate_request");
     return res.send(doneHtml(
       "📨",
-      alreadyDelegated
-        ? `依頼は既にスペースへ送信済みです。<br><b>${responderName}</b> さん、少々お待ちください。`
-        : `スペースに依頼メッセージを送りました。<br><b>${responderName}</b> さん、少々お待ちください。`,
+      isFirst
+        ? `スペースに依頼メッセージを送りました。<br><b>${responderName}</b> さん、少々お待ちください。`
+        : `依頼は既にスペースへ送信済みです。<br><b>${responderName}</b> さん、少々お待ちください。`,
       "#fef9ec"
     ));
   }
