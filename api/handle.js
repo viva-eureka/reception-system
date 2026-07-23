@@ -81,7 +81,7 @@ module.exports = async (req, res) => {
         responder_name:  responderName,
         responder_email: responderEmail,
         response_type:   "handling",
-      });
+      }).catch(e => console.error("responder insert error:", e));
 
       const ip = (req.headers["x-forwarded-for"]?.split(",")[0] || req.socket?.remoteAddress || null);
       await sb.from("reception_audit_logs").insert({

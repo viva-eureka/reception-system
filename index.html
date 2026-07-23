@@ -484,7 +484,7 @@ async function syncToSupabase(next, prev) {
       id:            log.id,
       visitor_name:  log.name,
       company_name:  log.company || null,
-      visit_type:    log.type || "walkin",
+      visit_type:    (log.type === "visitor" ? "walkin" : log.type) || "walkin",
       host_name:     log.host || null,
       person_count:  log.count || 1,
       visit_purpose: log.purpose || null,
