@@ -2030,12 +2030,15 @@ function Card({ children, className = "" }) {
 }
 
 function Dashboard({ db }) {
-  const today = "2026-06-05";
-  const visitorsIn = db.logs.filter((l) => l.action === "入館" && l.type === "visitor").length;
-  const deliveries = db.logs.filter((l) => l.type === "delivery").length;
-  const inBuilding = db.logs.filter((l) => l.type === "visitor")
-    .reduce((acc, l) => { acc[l.name] = l.action; return acc; }, {});
+  const today = new Date().toLocaleDateString("sv"); // "YYYY-MM-DD" in local time
+  const todayLogs = db.logs.filter((l) => new Date(l.ts).toLocaleDateString("sv") === today);
+  const visitorsIn = todayLogs.filter((l) => l.action === "入館" && l.type === "walkin").length;
+  const deliveries = todayLogs.filter((l) => l.type === "delivery").length;
+  // db.logs は降順（新しい順）なので first-wins で最新アクションを取得
+  const inBuilding = db.logs.filter((l) => l.type === "walkin")
+    .reduce((acc, l) => { if (!acc[l.name]) acc[l.name] = l.action; return acc; }, {});
   const currentlyIn = Object.values(inBuilding).filter((a) => a === "入館").length;
+  const todayInvitations = db.invitations.filter((i) => i.date === today).length;
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">ダッシュボード</h1>
@@ -2043,7 +2046,7 @@ function Dashboard({ db }) {
         <Stat label="本日の来訪者" value={visitorsIn} unit="名" color="text-sky-600" />
         <Stat label="配送受付" value={deliveries} unit="件" color="text-amber-600" />
         <Stat label="現在 在館中" value={currentlyIn} unit="名" color="text-emerald-600" />
-        <Stat label="本日の招待" value={db.invitations.length} unit="件" color="text-violet-600" />
+        <Stat label="本日の招待" value={todayInvitations} unit="件" color="text-violet-600" />
       </div>
       <Card className="p-6">
         <h2 className="font-bold text-slate-700 mb-4">直近の動き</h2>
@@ -2051,10 +2054,10 @@ function Dashboard({ db }) {
           {db.logs.slice(0, 6).map((l) => (
             <div key={l.id} className="flex items-center gap-3 text-sm">
               <span className={"w-2 h-2 rounded-full " + (l.action === "入館" ? "bg-emerald-500" : "bg-slate-300")} />
-              <span className="text-slate-400 w-16">{fmtTime(l.ts)}</span>
+              <span className="text-slate-400 w-24 shrink-0">{fmtDateTime(l.ts)}</span>
               <span className="font-medium text-slate-700">{l.name}</span>
               {l.company && <span className="text-slate-400">{l.company}</span>}
-              <span className={"ml-auto text-xs px-2 py-0.5 rounded-full " +
+              <span className={"ml-auto text-xs px-2 py-0.5 rounded-full shrink-0 " +
                 (l.type === "delivery" ? "bg-amber-100 text-amber-700" : "bg-sky-100 text-sky-700")}>
                 {l.type === "delivery" ? "配送" : "来訪"} / {l.action}
               </span>
