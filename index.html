@@ -571,7 +571,7 @@ async function runAutoCheckout(db, setDB) {
   const updatedLogs = db.logs.map(l =>
     ids.includes(l.id) ? { ...l, action: "退館", checked_out_at: checkedOutAt } : l
   );
-  setDB(prev => ({ ...prev, logs: updatedLogs }));
+  setDB({ ...db, logs: updatedLogs });
 }
 
 /* ---- Google Chat カード送信 ---- */
@@ -1040,7 +1040,7 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     const today = todayBH();
     if (!today.enabled) return false;
     const cur = clock.toTimeString().slice(0, 5);
-    return cur >= today.open && cur <= today.close;
+    return cur >= today.open && cur < today.close;
   };
 
   const greeting = () => {
@@ -1956,12 +1956,13 @@ function BigButton({ emoji, label, sub, color, onClick }) {
 function Admin({ db, setDB, notify, onLock, forceClosed, setForceClosed, onReset }) {
   const [tab, setTab] = useState("dashboard");
 
-  // 自動退館: 1分ごとにチェック
+  // 自動退館: 1分ごとにチェック（ref で常に最新の db を参照）
+  const dbRef = React.useRef(db);
+  React.useEffect(() => { dbRef.current = db; }, [db]);
   React.useEffect(() => {
-    const timer = setInterval(() => {
-      runAutoCheckout(db, setDB);
-    }, 60 * 1000);
-    runAutoCheckout(db, setDB); // 初回即時実行
+    const run = () => runAutoCheckout(dbRef.current, setDB);
+    const timer = setInterval(run, 60 * 1000);
+    run(); // 初回即時実行
     return () => clearInterval(timer);
   }, [db.settings.autoCheckoutEnabled, db.settings.autoCheckoutMinutes, db.settings.deliveryCheckoutMinutes]);
   const tabs = [
@@ -2032,10 +2033,10 @@ function Card({ children, className = "" }) {
 function Dashboard({ db }) {
   const today = new Date().toLocaleDateString("sv"); // "YYYY-MM-DD" in local time
   const todayLogs = db.logs.filter((l) => new Date(l.ts).toLocaleDateString("sv") === today);
-  const visitorsIn = todayLogs.filter((l) => l.type === "walkin").length;
+  const visitorsIn = todayLogs.filter((l) => l.type !== "delivery").length;
   const deliveries = todayLogs.filter((l) => l.type === "delivery").length;
   // db.logs は降順（新しい順）なので first-wins で最新アクションを取得
-  const inBuilding = db.logs.filter((l) => l.type === "walkin")
+  const inBuilding = db.logs.filter((l) => l.type !== "delivery")
     .reduce((acc, l) => { if (!acc[l.name]) acc[l.name] = l.action; return acc; }, {});
   const currentlyIn = Object.values(inBuilding).filter((a) => a === "入館").length;
   const todayInvitations = db.invitations.filter((i) => i.date === today).length;
@@ -2181,7 +2182,7 @@ function Logs({ db, setDB, notify }) {
                       <span className={l.action === "入館" ? "text-emerald-600 font-medium" : "text-slate-400"}>{l.action}</span>
                     )}
                     {c.key === "host" && <span className="text-slate-500">{l.host || "—"}</span>}
-                    {c.key === "count" && <span className="text-slate-500">—</span>}
+                    {c.key === "count" && <span className="text-slate-500">{l.count || "—"}</span>}
                     {c.key === "memo" && <span className="text-slate-400 text-xs italic">—</span>}
                   </td>
                 ))}
