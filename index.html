@@ -2032,7 +2032,7 @@ function Card({ children, className = "" }) {
 function Dashboard({ db }) {
   const today = new Date().toLocaleDateString("sv"); // "YYYY-MM-DD" in local time
   const todayLogs = db.logs.filter((l) => new Date(l.ts).toLocaleDateString("sv") === today);
-  const visitorsIn = todayLogs.filter((l) => l.action === "入館" && l.type === "walkin").length;
+  const visitorsIn = todayLogs.filter((l) => l.type === "walkin").length;
   const deliveries = todayLogs.filter((l) => l.type === "delivery").length;
   // db.logs は降順（新しい順）なので first-wins で最新アクションを取得
   const inBuilding = db.logs.filter((l) => l.type === "walkin")
