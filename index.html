@@ -1502,18 +1502,19 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
                       }} className="px-3 py-2 rounded-lg bg-sky-500 text-white text-sm font-medium">検索</button>
                     </div>
                     <div className="space-y-2">
-                      {db.invitations.filter((i) => !i.used).map((i) => (
-                        <button key={i.id} onClick={() => { setQrScanState(null); setPickerOpen(false); setQrSelectedInv(i); setCountInput(1); setPurposeInput(""); }}
-                          className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-sky-50 hover:border-sky-300 transition">
-                          <div className="font-semibold text-slate-800">{i.visitorName} 様</div>
-                          <div className="text-xs text-slate-500">{i.company} ／ 担当: {i.host}</div>
-                        </button>
-                      ))}
-                      {db.invitations.filter((i) => !i.used).length === 0 && (
-                        <div className="text-sm text-slate-400 py-4 text-center">
-                          受付可能な招待がありません
-                        </div>
-                      )}
+                      {(() => {
+                        const todayDate = new Date().toISOString().slice(0, 10);
+                        const upcoming = db.invitations.filter((i) => !i.used && (!i.date || i.date >= todayDate));
+                        return upcoming.length === 0
+                          ? <div className="text-sm text-slate-400 py-4 text-center">受付可能な招待がありません</div>
+                          : upcoming.map((i) => (
+                            <button key={i.id} onClick={() => { setQrScanState(null); setPickerOpen(false); setQrSelectedInv(i); setCountInput(1); setPurposeInput(""); }}
+                              className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-sky-50 hover:border-sky-300 transition">
+                              <div className="font-semibold text-slate-800">{i.visitorName} 様</div>
+                              <div className="text-xs text-slate-500">{i.company} ／ 担当: {i.host}{i.date ? ` ／ ${i.date}` : ""}</div>
+                            </button>
+                          ));
+                      })()}
                     </div>
                   </details>
                 </div>
