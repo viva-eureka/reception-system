@@ -369,7 +369,7 @@ async function loadFromSupabase() {
     sb.from("reception_settings").select("key,value"),
     sb.from("reception_rooms").select("*").eq("is_active", true).order("sort_order"),
     sb.from("reception_buttons").select("*").eq("is_active", true).order("sort_order"),
-    sb.from("reception_invitations").select("*").order("visit_date", { ascending: true }),
+    sb.from("reception_invitations").select("*").order("visit_date", { ascending: true }).order("visit_time", { ascending: true, nullsFirst: false }),
     sb.from("reception_visits").select("*").order("checked_in_at", { ascending: false }).limit(300),
     sb.from("reception_room_availability").select("*").eq("date", todayStr),
   ]), timeout]);
