@@ -31,11 +31,14 @@ function cors(req, res) {
   res.setHeader("Vary", "Origin");
 }
 
+// ボタン URL に載せる値の上限（長すぎると Google Chat がカードを描画できない）
+const clip = (s, max = 50) => String(s || "").slice(0, max);
+
 function buildHandleUrl(visitId, visitorName, company) {
   const p = new URLSearchParams({
     visitId: String(visitId || ""),
-    visitor: String(visitorName || ""),
-    company: String(company || ""),
+    visitor: clip(visitorName),
+    company: clip(company),
   });
   return `${BASE_URL}/api/handle?${p}`;
 }
@@ -43,8 +46,8 @@ function buildHandleUrl(visitId, visitorName, company) {
 function buildDelegateUrl(visitId, visitorName, company) {
   const p = new URLSearchParams({
     visitId: String(visitId || ""),
-    visitor: String(visitorName || ""),
-    company: String(company || ""),
+    visitor: clip(visitorName),
+    company: clip(company),
   });
   return `${BASE_URL}/api/delegate?${p}`;
 }

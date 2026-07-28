@@ -1614,11 +1614,13 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
                 <div>
                   <label className="text-slate-300 text-sm">お名前 *</label>
                   <input value={cardName} onChange={(e) => setCardName(e.target.value)}
+                    maxLength={50}
                     className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
                 </div>
                 <div>
                   <label className="text-slate-300 text-sm">会社名</label>
                   <input value={cardCompany} onChange={(e) => setCardCompany(e.target.value)}
+                    maxLength={50}
                     className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
                 </div>
                 <div>
@@ -1836,12 +1838,14 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
             <div>
               <label className="text-slate-300 text-sm">お名前 *</label>
               <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} autoFocus
+                maxLength={50}
                 placeholder="山田 太郎"
                 className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
             </div>
             <div>
               <label className="text-slate-300 text-sm">会社名（任意）</label>
               <input value={companyInput} onChange={(e) => setCompanyInput(e.target.value)}
+                maxLength={50}
                 placeholder="株式会社サンプル"
                 className="w-full mt-1 px-4 py-3 rounded-xl bg-white/10 text-white text-lg border border-white/20 focus:border-sky-400 outline-none" />
             </div>
