@@ -2234,8 +2234,27 @@ function Logs({ db, setDB, notify }) {
             <option value="out">退館済み</option>
           </select>
         </div>
-        <span className="text-xs text-slate-400 ml-auto">{filtered.length}件</span>
       </div>
+
+      {/* ページネーション（一覧の上に固定配置） */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mb-4 text-sm">
+          <span className="text-slate-400">
+            {filtered.length}件中 {(curPage - 1) * PER_PAGE + 1}–{Math.min(curPage * PER_PAGE, filtered.length)}件を表示
+          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={curPage <= 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              ◀ 前へ
+            </button>
+            <span className="text-slate-500 tabular-nums">{curPage} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              次へ ▶
+            </button>
+          </div>
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
@@ -2283,26 +2302,6 @@ function Logs({ db, setDB, notify }) {
           </tbody>
         </table>
       </Card>
-
-      {/* ページネーション */}
-      {filtered.length > 0 && (
-        <div className="flex items-center justify-between mt-4 text-sm">
-          <span className="text-slate-400">
-            {filtered.length}件中 {(curPage - 1) * PER_PAGE + 1}–{Math.min(curPage * PER_PAGE, filtered.length)}件を表示
-          </span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={curPage <= 1}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              ◀ 前へ
-            </button>
-            <span className="text-slate-500 tabular-nums">{curPage} / {totalPages}</span>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-              次へ ▶
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
