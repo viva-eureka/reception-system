@@ -2019,7 +2019,7 @@ function Admin({ db, setDB, notify, onLock, forceClosed, setForceClosed, onReset
         </div>
       </aside>
       <main className="flex-1 overflow-auto p-8">
-        {tab === "dashboard" && <Dashboard db={db} />}
+        {tab === "dashboard" && <Dashboard db={db} onReset={onReset} />}
         {tab === "logs" && <Logs db={db} setDB={setDB} notify={notify} />}
         {tab === "invitations" && <InvitationManager />}
         {tab === "rooms" && <RoomsDashboard db={db} />}
@@ -2034,7 +2034,7 @@ function Card({ children, className = "" }) {
   return <div className={"bg-white rounded-2xl border border-slate-200 shadow-sm " + className}>{children}</div>;
 }
 
-function Dashboard({ db }) {
+function Dashboard({ db, onReset }) {
   const today = new Date().toLocaleDateString("sv"); // "YYYY-MM-DD" in local time
   const todayLogs = db.logs.filter((l) => new Date(l.ts).toLocaleDateString("sv") === today);
   const visitorsIn = todayLogs.filter((l) => l.type !== "delivery").length;
@@ -2046,7 +2046,15 @@ function Dashboard({ db }) {
   const todayInvitations = db.invitations.filter((i) => i.date === today).length;
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">ダッシュボード</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-slate-800">ダッシュボード</h1>
+        {onReset && (
+          <button onClick={onReset}
+            className="text-sm px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center gap-1 transition-colors">
+            🔄 再読み込み
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-4 gap-4 mb-8">
         <Stat label="本日の来訪者" value={visitorsIn} unit="名" color="text-sky-600" />
         <Stat label="配送受付" value={deliveries} unit="件" color="text-amber-600" />
@@ -2093,11 +2101,46 @@ const ALL_COLUMNS = [
   { key: "memo",    label: "メモ" },
 ];
 
+const PER_PAGE = 10;
+
 function Logs({ db, setDB, notify }) {
   const [visibleCols, setVisibleCols] = useState(
     Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host"].includes(c.key)]))
   );
   const [colPickerOpen, setColPickerOpen] = useState(false);
+
+  // 絞り込み
+  const [period, setPeriod]         = useState("all"); // all | today | 7d | 30d
+  const [typeFilter, setTypeFilter] = useState("all"); // all | visit | delivery
+  const [statusFilter, setStatus]   = useState("all"); // all | in | out
+  const [page, setPage]             = useState(1);
+  // 絞り込み変更時は1ページ目に戻す
+  const resetPage = (setter) => (e) => { setter(e.target.value); setPage(1); };
+
+  const filtered = db.logs.filter(l => {
+    // 期間
+    if (period !== "all") {
+      const logDay = new Date(l.ts).toLocaleDateString("sv");
+      if (period === "today") {
+        if (logDay !== new Date().toLocaleDateString("sv")) return false;
+      } else {
+        const days = period === "7d" ? 7 : 30;
+        const cutoff = new Date(Date.now() - days * 86400000);
+        if (new Date(l.ts) < cutoff) return false;
+      }
+    }
+    // 区分
+    if (typeFilter === "delivery" && l.type !== "delivery") return false;
+    if (typeFilter === "visit"    && l.type === "delivery") return false;
+    // 退館状況
+    if (statusFilter === "in"  && l.action !== "入館") return false;
+    if (statusFilter === "out" && l.action !== "退館") return false;
+    return true;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const curPage    = Math.min(page, totalPages);
+  const pageRows   = filtered.slice((curPage - 1) * PER_PAGE, curPage * PER_PAGE);
 
   const checkout = async (log) => {
     const now = nowISO();
@@ -2118,7 +2161,7 @@ function Logs({ db, setDB, notify }) {
   const exportCSV = () => {
     const cols = ALL_COLUMNS.filter(c => visibleCols[c.key]);
     const header = cols.map(c => c.label).join(",");
-    const rows = db.logs.map(l => cols.map(c => {
+    const rows = filtered.map(l => cols.map(c => {
       if (c.key === "ts") return '"' + fmtDateTime(l.ts) + '"';
       if (c.key === "type") return l.type === "delivery" ? "配送" : "来訪";
       return '"' + (l[c.key] || "") + '"';
@@ -2160,6 +2203,40 @@ function Logs({ db, setDB, notify }) {
           )}
         </div>
       </div>
+
+      {/* 絞り込み */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400">期間</span>
+          <select value={period} onChange={resetPage(setPeriod)}
+            className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-400">
+            <option value="all">すべて</option>
+            <option value="today">本日</option>
+            <option value="7d">過去7日</option>
+            <option value="30d">過去30日</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400">区分</span>
+          <select value={typeFilter} onChange={resetPage(setTypeFilter)}
+            className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-400">
+            <option value="all">すべて</option>
+            <option value="visit">来訪</option>
+            <option value="delivery">配送</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-slate-400">状況</span>
+          <select value={statusFilter} onChange={resetPage(setStatus)}
+            className="text-sm px-3 py-2 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-400">
+            <option value="all">すべて</option>
+            <option value="in">在館中</option>
+            <option value="out">退館済み</option>
+          </select>
+        </div>
+        <span className="text-xs text-slate-400 ml-auto">{filtered.length}件</span>
+      </div>
+
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500">
@@ -2169,7 +2246,12 @@ function Logs({ db, setDB, notify }) {
             </tr>
           </thead>
           <tbody>
-            {db.logs.map((l) => (
+            {pageRows.length === 0 && (
+              <tr><td colSpan={cols.length + 1} className="px-4 py-12 text-center text-slate-400 text-sm">
+                該当する記録がありません
+              </td></tr>
+            )}
+            {pageRows.map((l) => (
               <tr key={l.id} className="border-t border-slate-100">
                 {cols.map(c => (
                   <td key={c.key} className="px-4 py-3">
@@ -2201,6 +2283,26 @@ function Logs({ db, setDB, notify }) {
           </tbody>
         </table>
       </Card>
+
+      {/* ページネーション */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mt-4 text-sm">
+          <span className="text-slate-400">
+            {filtered.length}件中 {(curPage - 1) * PER_PAGE + 1}–{Math.min(curPage * PER_PAGE, filtered.length)}件を表示
+          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={curPage <= 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              ◀ 前へ
+            </button>
+            <span className="text-slate-500 tabular-nums">{curPage} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              次へ ▶
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
