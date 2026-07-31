@@ -1,0 +1,82 @@
+name: VEXA Agent
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  agent:
+    if: github.event.label.name == 'agent'
+    runs-on: [self-hosted, vexa-agent]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create branch
+        id: branch
+        run: |
+          BRANCH="agent/issue-${{ github.event.issue.number }}"
+          git checkout -b "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          PROMPT="以下のIssueに従って実装してください。
+
+          # タイトル
+          ${ISSUE_TITLE}
+
+          # 内容
+          ${ISSUE_BODY}
+
+          リポジトリにCLAUDE.mdがあれば規約に従ってください。実装のみ行い、git操作（commit/push）は不要です。"
+          claude -p "$PROMPT" --dangerously-skip-permissions
+
+      - name: Commit and Push
+        id: commit
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          git config user.name "VEXA Agent"
+          git config user.email "agent@viva-eureka.co.jp"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "agent: issue #${{ github.event.issue.number }} ${{ github.event.issue.title }}"
+            git push origin "${{ steps.branch.outputs.branch }}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create PR
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          PR_URL=$(gh pr create \
+            --title "agent: ${{ github.event.issue.title }}" \
+            --body "Closes #${{ github.event.issue.number }}
+
+          VEXA Agent (Claude Code) による自動実装" \
+            --base main \
+            --head "${{ steps.branch.outputs.branch }}")
+          gh issue comment ${{ github.event.issue.number }} --body "実装完了・PRを作成しました: $PR_URL"
+
+      - name: Comment if no changes
+        if: steps.commit.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          gh issue comment ${{ github.event.issue.number }} --body "変更が生成されませんでした。Issue内容を具体化して再度ラベルを付け直してください。"
