@@ -2694,6 +2694,8 @@ function InvitationManager() {
 
   const statusLabel = (s) => ({ pending:"受付待ち", arrived:"到着済", cancelled:"キャンセル" }[s] || s);
   const statusColor = (s) => ({ pending:"text-sky-700 bg-sky-50", arrived:"text-emerald-700 bg-emerald-50", cancelled:"text-slate-400 bg-slate-50" }[s] || "");
+  // 来訪日を過ぎた招待は QR が無効（invite.html の判定と一致: visit_date < 今日）
+  const isExpired = (inv) => inv.visit_date && inv.visit_date < new Date().toLocaleDateString("sv");
 
   if (loading) return <div className="p-6 text-slate-400 text-sm">読み込み中…</div>;
 
@@ -2777,7 +2779,9 @@ function InvitationManager() {
         {invitations.length === 0 && (
           <div className="text-center py-12 text-slate-400 text-sm">招待状はまだありません</div>
         )}
-        {invitations.map(inv => (
+        {invitations.map(inv => {
+          const expired = inv.status === "pending" && isExpired(inv);
+          return (
           <div key={inv.id}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-opacity
               ${inv.status==="cancelled" ? "opacity-30 border-slate-100 bg-white" : "border-slate-200 bg-white"}`}>
@@ -2791,23 +2795,31 @@ function InvitationManager() {
                 {inv.purpose    && <span>📋 {inv.purpose}</span>}
               </div>
             </div>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${statusColor(inv.status)}`}>
-              {statusLabel(inv.status)}
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${expired ? "text-slate-400 bg-slate-50" : statusColor(inv.status)}`}>
+              {expired ? "期限切れ" : statusLabel(inv.status)}
             </span>
             {inv.status === "pending" && inv.qr_token && (
               <>
-                <button
-                  onClick={() => copyUrl(inviteUrl(inv.qr_token))}
-                  title="招待URLをコピー"
-                  className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs shrink-0 transition-colors">
-                  🔗
-                </button>
+                {expired ? (
+                  <button disabled title="来訪日を過ぎたため、この招待URLは無効です"
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-300 text-xs shrink-0 cursor-not-allowed">
+                    🔗
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => copyUrl(inviteUrl(inv.qr_token))}
+                    title="招待URLをコピー"
+                    className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs shrink-0 transition-colors">
+                    🔗
+                  </button>
+                )}
                 <button onClick={() => cancel(inv.id)}
                   className="text-slate-300 hover:text-red-400 text-xl shrink-0 leading-none transition-colors">×</button>
               </>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
