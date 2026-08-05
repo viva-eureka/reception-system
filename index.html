@@ -2674,6 +2674,11 @@ function InvitationManager() {
     const name = form.visitor_name.trim();
     if (!name)           { setFormError("氏名を入力してください"); return; }
     if (!form.visit_date) { setFormError("来訪日を入力してください"); return; }
+    const today = new Date().toLocaleDateString("sv");  // YYYY-MM-DD（端末ローカル＝JST）。isExpired と同じ基準
+    if (form.visit_date < today) {
+      setFormError("来訪日は本日以降の日付を指定してください（過去日の招待URLは期限切れ画面になります）");
+      return;
+    }
     setFormError("");
     setAdding(true);
     const { data, error } = await sb.from("reception_invitations").insert({
@@ -2741,7 +2746,8 @@ function InvitationManager() {
               </div>
               <div>
                 <label className="text-xs text-slate-500 mb-1 block">来訪日 *</label>
-                <input type="date" value={form.visit_date} onChange={e=>setForm(f=>({...f,visit_date:e.target.value}))}
+                <input type="date" value={form.visit_date} min={new Date().toLocaleDateString("sv")}
+                  onChange={e=>setForm(f=>({...f,visit_date:e.target.value}))}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-sky-400 bg-white" />
               </div>
               <div>

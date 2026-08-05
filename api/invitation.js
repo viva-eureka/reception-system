@@ -95,6 +95,13 @@ module.exports = async (req, res) => {
     }
     if (!visitor_name) return res.status(400).json({ error: "visitor_name required" });
 
+    // 過去日の招待は QR が即期限切れ（invite.html 判定: visit_date < 今日）になるため作成不可。
+    // 日本時間で「今日」を算出して比較する。
+    const todayJST = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    if (visit_date && visit_date < todayJST) {
+      return res.status(400).json({ error: "visit_date must be today or later", code: "past_visit_date" });
+    }
+
     const { data, error } = await sb()
       .from("reception_invitations")
       .insert({
