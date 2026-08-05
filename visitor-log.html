@@ -52,33 +52,7 @@
     </div>
 
     <div class="flex items-center gap-2 flex-wrap">
-      <!-- Date filter -->
-      <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-        <button data-filter="today"     class="filter-btn active px-3 py-1.5 bg-white hover:bg-gray-50 transition-colors">今日</button>
-        <button data-filter="week"      class="filter-btn px-3 py-1.5 bg-white hover:bg-gray-50 border-l border-gray-200 transition-colors">今週</button>
-        <button data-filter="month"     class="filter-btn px-3 py-1.5 bg-white hover:bg-gray-50 border-l border-gray-200 transition-colors">今月</button>
-        <button data-filter="all"       class="filter-btn px-3 py-1.5 bg-white hover:bg-gray-50 border-l border-gray-200 transition-colors">全件</button>
-      </div>
-
-      <!-- Search -->
-      <div class="relative">
-        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-        </svg>
-        <input id="search-input" type="text" placeholder="氏名・会社で検索"
-               class="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white w-44 sm:w-52 transition-shadow"/>
-      </div>
-
-      <!-- CSV export -->
-      <button id="csv-btn"
-              class="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700">
-        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12v8M8 16l4 4 4-4M20 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2"/>
-        </svg>
-        CSV
-      </button>
-
-      <!-- Refresh indicator -->
+      <!-- Refresh indicator（全タブ共通） -->
       <div class="flex items-center gap-1.5 text-xs text-gray-400 whitespace-nowrap">
         <div id="refresh-icon" class="w-3.5 h-3.5 border-2 border-gray-300 border-t-blue-500 rounded-full"></div>
         <span id="refresh-label">自動更新 30s</span>
@@ -104,12 +78,42 @@
 <!-- ═══ 来訪ログ ═══ -->
 <div id="section-visit">
 
-<!-- Stats bar -->
-<div class="max-w-screen-xl mx-auto px-4 sm:px-6 pt-4 pb-2">
-  <div class="flex gap-4 flex-wrap text-sm text-gray-500">
+<!-- Stats + 絞込み/検索/CSV（来訪ログ専用。タブ切替で #section-visit ごと hidden になり監査ログには表示されない） -->
+<div class="max-w-screen-xl mx-auto px-4 sm:px-6 pt-4 pb-2 flex items-center justify-between gap-3 flex-wrap">
+  <!-- Stats -->
+  <div class="flex gap-4 flex-wrap items-center text-sm text-gray-500">
     <span id="stat-total"  class="font-medium text-gray-900">—</span>
     <span id="stat-inhouse" class="text-green-700 font-medium">— 名在館中</span>
-    <span id="stat-range" class="ml-auto text-xs text-gray-400"></span>
+    <span id="stat-range" class="text-xs text-gray-400"></span>
+  </div>
+
+  <!-- 期間絞込み / 検索 / CSV -->
+  <div class="flex items-center gap-2 flex-wrap">
+    <!-- Date filter -->
+    <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+      <button data-filter="today"     class="filter-btn active px-3 py-1.5 bg-white hover:bg-gray-50 transition-colors">今日</button>
+      <button data-filter="week"      class="filter-btn px-3 py-1.5 bg-white hover:bg-gray-50 border-l border-gray-200 transition-colors">今週</button>
+      <button data-filter="month"     class="filter-btn px-3 py-1.5 bg-white hover:bg-gray-50 border-l border-gray-200 transition-colors">今月</button>
+      <button data-filter="all"       class="filter-btn px-3 py-1.5 bg-white hover:bg-gray-50 border-l border-gray-200 transition-colors">全件</button>
+    </div>
+
+    <!-- Search -->
+    <div class="relative">
+      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="氏名・会社で検索"
+             class="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white w-44 sm:w-52 transition-shadow"/>
+    </div>
+
+    <!-- CSV export -->
+    <button id="csv-btn"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-700">
+      <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12v8M8 16l4 4 4-4M20 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2"/>
+      </svg>
+      CSV
+    </button>
   </div>
 </div>
 
