@@ -437,14 +437,29 @@ async function loadFromSupabase() {
     status:      i.status,
   }));
 
+  // 対応者（Chat「対応する」を押した人）を /api/logs 経由で取得。
+  // reception_responders は anon で読めないため、service_role で responders を
+  // マージ済みの /api/logs を使って visit_id → 対応者名 のマップを作る。
+  let responderByVisit = {};
+  try {
+    const rlog = await fetch("/api/logs?type=visit&filter=all&limit=300");
+    if (rlog.ok) {
+      const rrows = await rlog.json();
+      (rrows || []).forEach(v => {
+        if (v && v.responder && v.responder.responder_name) responderByVisit[v.id] = v.responder.responder_name;
+      });
+    }
+  } catch (e) { console.error("responder fetch error:", e); }
+
   const logs = (visitRes.data || []).map(v => ({
-    id:      v.id,
-    name:    v.visitor_name,
-    company: v.company_name || "",
-    type:    v.visit_type,
-    host:    v.host_name || "",
-    action:  v.checked_out_at ? "退館" : "入館",
-    ts:      v.checked_in_at,
+    id:        v.id,
+    name:      v.visitor_name,
+    company:   v.company_name || "",
+    type:      v.visit_type,
+    host:      v.host_name || "",
+    action:    v.checked_out_at ? "退館" : "入館",
+    ts:        v.checked_in_at,
+    responder: responderByVisit[v.id] || "",
   }));
 
   return {
@@ -2098,14 +2113,14 @@ const ALL_COLUMNS = [
   { key: "action",  label: "動作" },
   { key: "host",    label: "担当" },
   { key: "count",   label: "人数" },
-  { key: "memo",    label: "メモ" },
+  { key: "responder", label: "対応者" },
 ];
 
 const PER_PAGE = 10;
 
 function Logs({ db, setDB, notify }) {
   const [visibleCols, setVisibleCols] = useState(
-    Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host"].includes(c.key)]))
+    Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host","responder"].includes(c.key)]))
   );
   const [colPickerOpen, setColPickerOpen] = useState(false);
 
@@ -2288,7 +2303,7 @@ function Logs({ db, setDB, notify }) {
                     )}
                     {c.key === "host" && <span className="text-slate-500">{l.host || "—"}</span>}
                     {c.key === "count" && <span className="text-slate-500">{l.count || "—"}</span>}
-                    {c.key === "memo" && <span className="text-slate-400 text-xs italic">—</span>}
+                    {c.key === "responder" && <span className="text-slate-600">{l.responder || "—"}</span>}
                   </td>
                 ))}
                 <td className="px-4 py-3 text-right">
