@@ -2119,9 +2119,19 @@ const ALL_COLUMNS = [
 const PER_PAGE = 10;
 
 function Logs({ db, setDB, notify }) {
-  const [visibleCols, setVisibleCols] = useState(
-    Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host","responder"].includes(c.key)]))
-  );
+  // 表示列のチェック状態は localStorage に保持し、画面遷移・再読み込みでも維持する
+  const [visibleCols, setVisibleCols] = useState(() => {
+    const defaults = Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host","responder"].includes(c.key)]));
+    try {
+      const saved = JSON.parse(localStorage.getItem("logs_visible_cols") || "null");
+      if (saved && typeof saved === "object") {
+        const merged = { ...defaults };
+        ALL_COLUMNS.forEach(c => { if (c.key in saved) merged[c.key] = c.always ? true : !!saved[c.key]; });
+        return merged;  // 新規列は既定、固定列は常にON、それ以外は保存値を復元
+      }
+    } catch {}
+    return defaults;
+  });
   const [colPickerOpen, setColPickerOpen] = useState(false);
 
   // 絞り込み
@@ -2209,7 +2219,11 @@ function Logs({ db, setDB, notify }) {
               {ALL_COLUMNS.map(c => (
                 <label key={c.key} className="flex items-center gap-2 py-1.5 cursor-pointer">
                   <input type="checkbox" checked={!!visibleCols[c.key]} disabled={c.always}
-                    onChange={() => setVisibleCols(v => ({ ...v, [c.key]: !v[c.key] }))} />
+                    onChange={() => setVisibleCols(v => {
+                      const next = { ...v, [c.key]: !v[c.key] };
+                      try { localStorage.setItem("logs_visible_cols", JSON.stringify(next)); } catch {}
+                      return next;
+                    })} />
                   <span className="text-sm text-slate-700">{c.label}</span>
                   {c.always && <span className="text-xs text-slate-400 ml-auto">固定</span>}
                 </label>
