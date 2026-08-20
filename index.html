@@ -461,6 +461,7 @@ async function loadFromSupabase() {
     host:      v.host_name || "",
     action:    v.checked_out_at ? "退館" : "入館",
     ts:        v.checked_in_at,
+    checked_out_at: v.checked_out_at || null,
     responder: responderByVisit[v.id] || "",
   }));
 
@@ -482,6 +483,7 @@ async function loadFromSupabase() {
       deliveryCheckoutMinutes: parseInt(kv["delivery_checkout_minutes"]) || 5,
       autoCheckoutEnabled:    kv["auto_checkout_enabled"] !== false && kv["auto_checkout_enabled"] !== "false",
       adminEmail:             kv["admin_email"] || "",
+      announcement:           _strVal(kv["announcement"]),
     },
     invitations,
     logs,
@@ -553,6 +555,7 @@ async function syncToSupabase(next, prev) {
       { key: "auto_checkout_minutes",    value: s.autoCheckoutMinutes },
       { key: "delivery_checkout_minutes", value: s.deliveryCheckoutMinutes },
       { key: "auto_checkout_enabled",     value: s.autoCheckoutEnabled },
+      { key: "announcement",              value: s.announcement || "" },
       { key: "admin_email",               value: s.adminEmail || null },
     ];
     for (const row of rows) {
@@ -643,6 +646,7 @@ const defaultDB = () => ({
     companyName: "株式会社ユリーカ",
     companyLogo: null,
     tagline: "SIMPLEVOLUTION.",
+    announcement: "",
     businessHours: DEFAULT_BUSINESS_HOURS,
     receptionButtons: DEFAULT_BUTTONS,
     greetingMode: "name",
@@ -1287,6 +1291,14 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
     return (
       <KioskShell bg={th.bg} bgImage={db.settings.standbyBgImage || ""}>
         <StandbyDecor theme={th} />
+        {db.settings.announcement && (
+          <div className="absolute top-0 left-0 right-0 z-20 flex justify-center px-4 pt-4 pointer-events-none">
+            <div className="max-w-2xl w-full rounded-2xl bg-white/90 backdrop-blur px-5 py-3 shadow-lg border border-white/40 flex items-start gap-2.5">
+              <span className="text-lg leading-none mt-0.5">📢</span>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{db.settings.announcement}</p>
+            </div>
+          </div>
+        )}
         <div className="relative z-10 flex-1 flex flex-col md:flex-row items-center justify-center cursor-pointer select-none" onClick={() => setScreen("menu")}>
           {/* 上/左カラム: あいさつ + ロゴ */}
           <div className="flex-1 flex flex-col items-center justify-center text-center px-8 py-4">
@@ -2116,6 +2128,7 @@ const ALL_COLUMNS = [
   { key: "host",    label: "担当" },
   { key: "count",   label: "人数" },
   { key: "responder", label: "対応者" },
+  { key: "checkout", label: "退館日時" },
 ];
 
 const PER_PAGE = 10;
@@ -2123,7 +2136,7 @@ const PER_PAGE = 10;
 function Logs({ db, setDB, notify }) {
   // 表示列のチェック状態は localStorage に保持し、画面遷移・再読み込みでも維持する
   const [visibleCols, setVisibleCols] = useState(() => {
-    const defaults = Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host","responder"].includes(c.key)]));
+    const defaults = Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.always || ["ts","name","company","type","action","host","responder","checkout"].includes(c.key)]));
     try {
       const saved = JSON.parse(localStorage.getItem("logs_visible_cols") || "null");
       if (saved && typeof saved === "object") {
@@ -2137,7 +2150,9 @@ function Logs({ db, setDB, notify }) {
   const [colPickerOpen, setColPickerOpen] = useState(false);
 
   // 絞り込み
-  const [period, setPeriod]         = useState("all"); // all | today | 7d | 30d
+  const [period, setPeriod]         = useState("all"); // all | today | 7d | 30d | custom
+  const [customFrom, setCustomFrom] = useState("");    // 任意期間の開始日（YYYY-MM-DD）
+  const [customTo, setCustomTo]     = useState("");    // 任意期間の終了日（YYYY-MM-DD）
   const [typeFilter, setTypeFilter] = useState("all"); // all | visit | delivery
   const [statusFilter, setStatus]   = useState("all"); // all | in | out
   const [page, setPage]             = useState(1);
@@ -2146,7 +2161,12 @@ function Logs({ db, setDB, notify }) {
 
   const filtered = db.logs.filter(l => {
     // 期間
-    if (period !== "all") {
+    if (period === "custom") {
+      // 任意期間指定（開始日〜終了日、両端含む。未指定側は無制限）
+      const logDay = new Date(l.ts).toLocaleDateString("sv");
+      if (customFrom && logDay < customFrom) return false;
+      if (customTo   && logDay > customTo)   return false;
+    } else if (period !== "all") {
       const logDay = new Date(l.ts).toLocaleDateString("sv");
       if (period === "today") {
         if (logDay !== new Date().toLocaleDateString("sv")) return false;
@@ -2190,6 +2210,7 @@ function Logs({ db, setDB, notify }) {
     const header = cols.map(c => c.label).join(",");
     const rows = filtered.map(l => cols.map(c => {
       if (c.key === "ts") return '"' + fmtDateTime(l.ts) + '"';
+      if (c.key === "checkout") return '"' + (l.checked_out_at ? fmtDateTime(l.checked_out_at) : "") + '"';
       if (c.key === "type") return l.type === "delivery" ? "配送" : "来訪";
       return '"' + (l[c.key] || "") + '"';
     }).join(","));
@@ -2245,7 +2266,17 @@ function Logs({ db, setDB, notify }) {
             <option value="today">本日</option>
             <option value="7d">過去7日</option>
             <option value="30d">過去30日</option>
+            <option value="custom">期間指定</option>
           </select>
+          {period === "custom" && (
+            <React.Fragment>
+              <input type="date" value={customFrom} max={customTo || undefined} onChange={resetPage(setCustomFrom)}
+                className="text-sm px-2 py-2 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-400" />
+              <span className="text-xs text-slate-400">〜</span>
+              <input type="date" value={customTo} min={customFrom || undefined} onChange={resetPage(setCustomTo)}
+                className="text-sm px-2 py-2 rounded-lg border border-slate-200 bg-white outline-none focus:border-sky-400" />
+            </React.Fragment>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-slate-400">区分</span>
@@ -2320,6 +2351,7 @@ function Logs({ db, setDB, notify }) {
                     {c.key === "host" && <span className="text-slate-500">{l.host || "—"}</span>}
                     {c.key === "count" && <span className="text-slate-500">{l.count || "—"}</span>}
                     {c.key === "responder" && <span className="text-slate-600">{l.responder || "—"}</span>}
+                    {c.key === "checkout" && <span className="text-slate-500">{l.checked_out_at ? fmtDateTime(l.checked_out_at) : "—"}</span>}
                   </td>
                 ))}
                 <td className="px-4 py-3 text-right">
@@ -3423,6 +3455,13 @@ function Settings({ db, setDB, forceClosed, setForceClosed, onReset }) {
         <h2 className="font-bold text-slate-700">基本情報・待ち受け画面</h2>
         <Field label="会社名" value={s.companyName} onChange={(v) => set({ companyName: v })} />
         <Field label="タグライン（ロゴ下）" value={s.tagline} onChange={(v) => set({ tagline: v })} />
+        <div>
+          <label className="text-xs text-slate-500 mb-1 block">お知らせ（受付の待ち受け画面に表示）</label>
+          <textarea value={s.announcement || ""} onChange={(e) => set({ announcement: e.target.value })}
+            rows={2} placeholder="例: 本日は15時より受付を一時停止します。ご了承ください。"
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-sky-400 resize-y" />
+          <p className="text-xs text-slate-400 mt-1">空欄にすると表示されません。改行して複数行も表示できます。</p>
+        </div>
       </Card>
       <Card className="p-6 mb-5 space-y-4">
         <h2 className="font-bold text-slate-700">受付時間（曜日別）</h2>
