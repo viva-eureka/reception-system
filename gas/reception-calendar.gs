@@ -16,7 +16,10 @@
 //  6. setupTrigger() を一度だけ手動実行してトリガーを一括登録
 // ============================================================
 
-const RECEPTION_URL   = "https://reception-eureka.com";
+// サーバー間POST（会議室同期・招待作成）の宛先。
+// 独自ドメイン(reception-eureka.com)はリダイレクト設定によりPOSTがGET化され
+// /api/room-availability 等が405になるため、リダイレクトの無いVercel直URLを使う。
+const RECEPTION_URL   = "https://reception-system-five.vercel.app";
 const COMPANY_DOMAIN  = "viva-eureka.co.jp"; // 自社ドメイン（社外ゲスト判定に使用）
 
 // 個人ドメイン扱いにして会社名推測をスキップするドメイン
