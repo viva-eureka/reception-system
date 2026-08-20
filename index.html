@@ -361,7 +361,9 @@ function normalizeBH(raw) {
 
 /* ---- Supabase からロード ---- */
 async function loadFromSupabase() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 会議室空き状況の date は Apps Script が日本時間で書き込むため、こちらも JST 基準の「今日」で問い合わせる
+  // （UTC だと JST 午前0〜9時に前日を引き「同期データなし」になる）
+  const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const timeout = new Promise((_, reject) =>
     setTimeout(() => reject(new Error("Supabase接続タイムアウト（10秒）")), 10000)
   );
