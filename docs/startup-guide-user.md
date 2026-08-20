@@ -99,9 +99,13 @@ iPad の受付メニューに表示するボタンを編集・並び替えでき
 6. スクリプト上部の定数を確認（変更不要のはずですが念のり確認）
 
 ```javascript
-const RECEPTION_URL  = "https://reception-eureka.com";
+const RECEPTION_URL  = "https://reception-system-five.vercel.app";
 const COMPANY_DOMAIN = "viva-eureka.co.jp";
 ```
+
+> **注意**: `RECEPTION_URL` はリダイレクトの無い直URL（`*.vercel.app`）を指定してください。
+> 独自ドメイン（例: `reception-eureka.com`）はリダイレクト設定によりサーバー間の
+> POST 送信が失敗（405）し、会議室の空き状況が「同期データなし」になります。
 
 ### 3-2. シークレットの設定（1回だけ）
 
