@@ -21,6 +21,12 @@
 | **Cursor / Windsurf** | リポジトリを開く | `AGENTS.md`（必要なら `.cursorrules`） |
 | **GitHub Copilot / Chat** | リポジトリを開き Chat で docs を参照 | `AGENTS.md`（手動で読ませる） |
 
+**ツール別の自動読込ファイル**（前提・制約をエージェントが自動で拾う入口。中身は `AGENTS.md`／`docs/` に集約）：
+- GitHub Copilot … `.github/copilot-instructions.md`
+- Cursor … `.cursor/rules/reception-system.mdc`（`AGENTS.md` も参照）
+- Windsurf … `.windsurfrules`
+- Claude Code … `CLAUDE.md` / `AGENTS.md` / `.claude/skills/`
+
 **共通の最初の一手（プロンプト）：**
 > このリポジトリは受付システム。まず `AGENTS.md` と `docs/maintenance-handover.md`、`docs/history-and-decisions.md` を読んで、概要と注意点を要約して。
 

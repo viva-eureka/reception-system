@@ -1,0 +1,14 @@
+# 受付システム（Windsurf 用ルール）
+
+保守ガイドは直下の AGENTS.md に集約。作業前に AGENTS.md と docs/maintenance-handover.md を読むこと。
+
+これは何か: 受付管理システム（ラクネコ代替）。フロント=Vercel+index.html（単一ファイル・React+Babel CDN）、API=api/*.js、DB=Supabase、連携=Google Apps Script、通知=Google Chat。
+
+必ず守る:
+- 変更は ブランチ → PR → Vercelプレビュー確認 → main マージ（＝本番反映）。CIは無い（プレビュー目視が品質ゲート）。
+- 秘密情報の値をコミットしない（SUPABASE_SERVICE_ROLE_KEY / OAuth secret / INVITATION_SECRET 等）。値はVercel等で管理。
+- DBスキーマ変更は supabase/migrations/。本番は migrations より進んでいる（drift）＝現行本番が正。破壊的変更はしない。anon経路はRLS読み取り許可も確認。
+- GASの RECEPTION_URL は直URL（*.vercel.app）。独自ドメインはPOSTが405。
+- 日付はJST基準。
+
+参考: docs/maintenance-handover.md（障害対応ランブック）／docs/history-and-decisions.md（経緯）／docs/ai-agent-maintenance.md（AI保守手順）
