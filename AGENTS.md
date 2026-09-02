@@ -32,3 +32,8 @@
 - `gas/reception-calendar.gs` … カレンダー連携・会議室同期
 - `supabase/migrations/` … スキーマ
 - `docs/` … ドキュメント（`docs/README.md` が索引）
+
+## Claude Code を使う場合
+`.claude/skills/` にプロジェクトスキルを同梱している（他エージェントでは無視されるが、内容は各SKILL.mdとして読める）。
+- `reception-system-runbook` … 障害・不具合の一次対応（会議室同期・通知・PIN 等）
+- `reception-system-change` … コード変更・機能追加の前提と手順
