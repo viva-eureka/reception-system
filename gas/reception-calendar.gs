@@ -87,13 +87,21 @@ function _onCalendarEventUpdatedBody(e) {
       if (props.getProperty(doneKey)) continue;
 
       // 自分が主催（オーガナイザー／作成者）のイベントのみ対象にする。
-      // 他人から届いた会議招待（Teams等のオンライン会議に「参加」で回答した予定など）は、
-      // 自分はゲスト側であって来訪受付ではないため、招待状を作成しない。
+      // 他人から届いた会議招待（自分はゲスト側）は来訪受付ではないため作成しない。
       // ※ organizer.self / creator.self は Calendar API のイベントリソースが返す真偽値。
+      // ※ ただし Teams→Googleカレンダー連携で取り込まれた予定は「自分が主催」に
+      //    見えるためこれだけでは弾けない。オンライン会議判定（下）で除外する。
       const isHost =
         (ev.organizer && ev.organizer.self === true) ||
         (ev.creator   && ev.creator.self   === true);
       if (!isHost) continue;
+
+      // Teams / Zoom / Google Meet 等のオンライン会議は「来訪」ではないため除外する。
+      // （会議室の有無に関係なく、対面の来訪予定のみを招待状の対象にするための判定）
+      if (isOnlineMeeting(ev)) {
+        Logger.log("オンライン会議のためスキップ: " + (ev.summary || "(無題)"));
+        continue;
+      }
 
       // 社外ゲストを抽出（自分・社内・リソースカレンダーを除外）
       const attendees      = ev.attendees || [];
@@ -320,6 +328,36 @@ function formatHostName(email) {
   return local.split(".").map(function(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
   }).join(" ");
+}
+
+/**
+ * Teams / Zoom / Google Meet 等のオンライン会議かどうかを判定する。
+ * オンライン会議は来訪ではないため、招待状の自動作成対象から除外する。
+ * 判定材料:
+ *   - hangoutLink / conferenceData … Google Meet 等の構造化された会議情報
+ *   - location / description / summary … Teams・Zoom 等のURLや名称の文字列
+ */
+function isOnlineMeeting(ev) {
+  if (ev.hangoutLink) return true;
+  if (ev.conferenceData) return true;
+
+  var haystack = [
+    ev.location    || "",
+    ev.description || "",
+    ev.summary     || "",
+  ].join(" ").toLowerCase();
+
+  var markers = [
+    "teams.microsoft.com", "microsoft teams", "teams meeting", "meetup-join",
+    "zoom.us", "zoom meeting",
+    "meet.google.com",
+    "webex.com", "webex",
+    "whereby.com", "bluejeans", "gotomeeting", "chime.aws", "meet.lync.com",
+  ];
+  for (var i = 0; i < markers.length; i++) {
+    if (haystack.indexOf(markers[i]) !== -1) return true;
+  }
+  return false;
 }
 
 /** メールドメインから会社名を推測（個人ドメインは空文字） */
