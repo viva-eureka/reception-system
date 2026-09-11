@@ -144,7 +144,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(0,0,0,.8), 0 0 0 1px rgba(200,160,50,.25)" },
     clock: "text-white/90 font-thin",
     clockSub: "text-amber-300/60",
-    date: "text-amber-100/40 text-sm tracking-widest font-light",
+    date: "text-amber-100/40 tracking-widest font-light",
     btn: { from:"#8a6a10", to:"#c9a030", glow:"rgba(180,140,30,.5)", shine:"shine-gold" },
     footer: "text-amber-700/40 tracking-[0.35em]",
     divider: { line: "bg-white/15", text: "text-white/30" },
@@ -165,7 +165,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.06)" },
     clock: "text-white/80 font-thin",
     clockSub: "text-slate-500/70",
-    date: "text-slate-500/50 text-sm tracking-widest font-light",
+    date: "text-slate-500/50 tracking-widest font-light",
     btn: { from:"#1e293b", to:"#334155", glow:"rgba(148,163,184,.3)", shine:"shine-silver" },
     footer: "text-slate-700/50 tracking-[0.4em]",
     divider: { line: "bg-white/15", text: "text-white/30" },
@@ -187,7 +187,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(0,0,0,.85), 0 0 0 1px rgba(160,100,255,.15)" },
     clock: "text-white/85 font-thin",
     clockSub: "text-violet-400/60",
-    date: "text-violet-200/30 text-sm tracking-widest font-light",
+    date: "text-violet-200/30 tracking-widest font-light",
     btn: { from:"#4c1d95", to:"#6d28d9", glow:"rgba(139,92,246,.45)", shine:"shine-silver" },
     footer: "text-violet-800/40 tracking-[0.35em]",
     divider: { line: "bg-white/15", text: "text-white/30" },
@@ -209,7 +209,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 25px 70px rgba(2,16,43,.7)" },
     clock: "text-white/90 font-extralight",
     clockSub: "text-sky-300/70",
-    date: "text-slate-400/60 text-sm tracking-wide",
+    date: "text-slate-400/60 tracking-wide",
     btn: { from:"#0369a1", to:"#4f46e5", glow:"rgba(56,189,248,.45)", shine:"shine" },
     footer: "text-slate-600/50 tracking-widest",
     divider: { line: "bg-white/15", text: "text-white/30" },
@@ -231,7 +231,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 30px 80px rgba(20,0,0,.85), 0 0 0 1px rgba(200,60,40,.2)" },
     clock: "text-white/85 font-thin",
     clockSub: "text-red-400/60",
-    date: "text-red-200/30 text-sm tracking-widest font-light",
+    date: "text-red-200/30 tracking-widest font-light",
     btn: { from:"#7f1d1d", to:"#b91c1c", glow:"rgba(239,68,68,.45)", shine:"shine-silver" },
     footer: "text-red-900/50 tracking-[0.35em]",
     divider: { line: "bg-white/15", text: "text-white/30" },
@@ -254,7 +254,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 20px 60px rgba(99,102,241,.10), 0 0 0 1px rgba(99,102,241,.08)" },
     clock: "text-slate-700 font-thin",
     clockSub: "text-indigo-400",
-    date: "text-slate-400 text-sm tracking-widest font-light",
+    date: "text-slate-400 tracking-widest font-light",
     btn: { from:"#4f46e5", to:"#6d28d9", glow:"rgba(99,102,241,.30)", shine:"shine-silver" },
     footer: "text-slate-300/80 tracking-widest",
   },
@@ -274,7 +274,7 @@ const THEMES = {
     logoCard: { bg:"#fffef9", shadow:"0 20px 60px rgba(180,130,20,.10), 0 0 0 1px rgba(180,130,20,.07)" },
     clock: "text-stone-700 font-thin",
     clockSub: "text-amber-500/70",
-    date: "text-stone-400 text-sm tracking-widest font-light",
+    date: "text-stone-400 tracking-widest font-light",
     btn: { from:"#92400e", to:"#b45309", glow:"rgba(180,130,20,.30)", shine:"shine-gold" },
     footer: "text-amber-200 tracking-widest",
   },
@@ -295,7 +295,7 @@ const THEMES = {
     logoCard: { bg:"#fff", shadow:"0 20px 60px rgba(236,72,153,.10), 0 0 0 1px rgba(236,72,153,.08)" },
     clock: "text-rose-900/70 font-thin",
     clockSub: "text-rose-400",
-    date: "text-rose-300 text-sm tracking-widest font-light",
+    date: "text-rose-300 tracking-widest font-light",
     btn: { from:"#be185d", to:"#e11d48", glow:"rgba(236,72,153,.30)", shine:"shine-silver" },
     footer: "text-rose-200 tracking-widest",
   },
@@ -1317,16 +1317,18 @@ function Kiosk({ db, setDB, notify, forceClosed }) {
 
           {/* 下/右カラム: 時計 + ボタン */}
           <div className="flex-1 flex flex-col items-center justify-center text-center px-8 py-4">
-            <div className="fadeup-3 flex items-end gap-1 tabular-nums leading-none">
-              <span className={"text-7xl tracking-tight " + th.clock}>
+            {/* 日付を主役にして時刻の上に大きく表示（横幅に応じてclampで可変） */}
+            <div className={"fadeup-3 tracking-tight leading-tight " + th.clock}
+                 style={{ fontSize: "clamp(1.5rem, 2.8vw, 3rem)" }}>
+              {clock.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+            </div>
+            <div className="fadeup-3 mt-3 flex items-end gap-1 tabular-nums leading-none">
+              <span className={"text-4xl " + th.date}>
                 {clock.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
               </span>
-              <span className={"text-xl mb-2 w-8 text-left font-light " + th.clockSub}>
+              <span className={"text-base mb-1 w-6 text-left font-light " + th.clockSub}>
                 {String(clock.getSeconds()).padStart(2, "0")}
               </span>
-            </div>
-            <div className={"fadeup-3 mt-2 " + th.date}>
-              {clock.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
             </div>
             <div className="fadeup-4 mt-8 px-8 py-4 rounded-full text-base font-medium flex items-center gap-3 cursor-pointer"
                  style={{ background: `linear-gradient(to right, ${th.btn.from}, ${th.btn.to})`,
