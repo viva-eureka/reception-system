@@ -777,7 +777,8 @@ function QRCamera({ onDetect }) {
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } }
+          // 受付端末（iPad）は来訪者に向けて設置するため、来訪者側＝インカメラを使う
+          video: { facingMode: { ideal: "user" }, width: { ideal: 1280 } }
         });
         if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
         const video = videoRef.current;
@@ -832,7 +833,10 @@ function QRCamera({ onDetect }) {
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
-      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+      {/* インカメラなので鏡像表示にして、かざす向きを直感的にする。
+          jsQRへ渡すのは反転前の映像（canvas）なので読み取りには影響しない */}
+      <video ref={videoRef} className="w-full h-full object-cover" playsInline muted
+             style={{ transform: "scaleX(-1)" }} />
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
         <div className="w-52 h-52 rounded-2xl"
           style={{ border: "2px solid rgba(56,189,248,.9)", boxShadow: "0 0 0 9999px rgba(0,0,0,.45)" }} />
@@ -855,7 +859,8 @@ function CardCamera({ onCapture }) {
     (async () => {
       try {
         const s = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } }
+          // QRカメラと同じ理由でインカメラを使う
+          video: { facingMode: { ideal: "user" }, width: { ideal: 1920 } }
         });
         if (!active) { s.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = s;
