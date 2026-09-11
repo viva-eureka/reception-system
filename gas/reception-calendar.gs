@@ -86,6 +86,15 @@ function _onCalendarEventUpdatedBody(e) {
       const doneKey = "inv_" + ev.id.replace(/[^a-z0-9]/gi, "_");
       if (props.getProperty(doneKey)) continue;
 
+      // 自分が主催（オーガナイザー／作成者）のイベントのみ対象にする。
+      // 他人から届いた会議招待（Teams等のオンライン会議に「参加」で回答した予定など）は、
+      // 自分はゲスト側であって来訪受付ではないため、招待状を作成しない。
+      // ※ organizer.self / creator.self は Calendar API のイベントリソースが返す真偽値。
+      const isHost =
+        (ev.organizer && ev.organizer.self === true) ||
+        (ev.creator   && ev.creator.self   === true);
+      if (!isHost) continue;
+
       // 社外ゲストを抽出（自分・社内・リソースカレンダーを除外）
       const attendees      = ev.attendees || [];
       const externalGuests = attendees.filter(function(a) {
