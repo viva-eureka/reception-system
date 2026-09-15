@@ -105,6 +105,21 @@ function _onCalendarEventUpdatedBody(e) {
 
       // 社外ゲストを抽出（自分・社内・リソースカレンダーを除外）
       const attendees      = ev.attendees || [];
+
+      // Outlook / Teams / Microsoft 365 から同期された予定を除外する。
+      // これらの予定には、必ず自社のMicrosoftテナント（*.onmicrosoft.com、
+      // 例: eureka03.onmicrosoft.com）のアドレスが参加者として含まれる。
+      // このアドレスはGoogleアカウントの自分とは別物のため「社外ゲスト」に誤判定され、
+      // 来訪ではないのに招待状が発火していた（Teams会議に限らず、ただのOutlook予定でも発生）。
+      // Googleで直接作成した対面来訪の予定にはこのアドレスは現れないため、確実な判定に使える。
+      const hasM365TenantAttendee = attendees.some(function(a) {
+        return (a.email || "").toLowerCase().indexOf(".onmicrosoft.com") !== -1;
+      });
+      if (hasM365TenantAttendee) {
+        Logger.log("Microsoft 365 同期予定のためスキップ: " + (ev.summary || "(無題)"));
+        continue;
+      }
+
       const externalGuests = attendees.filter(function(a) {
         if (a.self) return false;
         const email = (a.email || "").toLowerCase();
