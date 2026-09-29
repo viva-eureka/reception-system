@@ -550,7 +550,8 @@ async function syncToSupabase(next, prev) {
       { key: "standby_bg_image",     value: s.standbyBgImage || "" },
       { key: "allow_outside_hours",  value: s.afterHoursReception },
       { key: "business_hours",       value: s.businessHours },
-      { key: "google_chat_webhook",  value: s.chatWebhook || null },
+      // google_chat_webhook は専用UI（WebhookSetting）が単独で管理する。
+      // ここで書くと、専用UIで設定した値をメイン設定保存が古い値で上書きしてしまうため含めない。
       { key: "visitor_methods",      value: s.visitorMethods || DEFAULT_VISITOR_METHODS },
       { key: "auto_checkout_minutes",    value: s.autoCheckoutMinutes },
       { key: "delivery_checkout_minutes", value: s.deliveryCheckoutMinutes },
@@ -3017,7 +3018,7 @@ function WebhookSetting() {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    sb.from("reception_settings").select("value").eq("key", "webhook_url").maybeSingle()
+    sb.from("reception_settings").select("value").eq("key", "google_chat_webhook").maybeSingle()
       .then(({ data, error }) => {
         if (!error && data?.value !== undefined) {
           const v = data.value;
@@ -3032,7 +3033,7 @@ function WebhookSetting() {
     setStatus("saving");
     setErrMsg("");
     const { error } = await sb.from("reception_settings")
-      .upsert({ key: "webhook_url", value: url.trim() }, { onConflict: "key" });
+      .upsert({ key: "google_chat_webhook", value: url.trim() }, { onConflict: "key" });
     if (error) {
       setStatus("error");
       setErrMsg(error.message);

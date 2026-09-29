@@ -120,7 +120,7 @@ module.exports = async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    // ── Chat 通知（設定から webhook_url を読む） ──
+    // ── Chat 通知（設定 google_chat_webhook → 無ければ env にフォールバック） ──
     const settings = await getSettings("google_chat_webhook");
     const webhookUrl = settings.google_chat_webhook || process.env.GOOGLE_CHAT_WEBHOOK_URL;
     if (webhookUrl && data) {
