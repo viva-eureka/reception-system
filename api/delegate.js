@@ -14,6 +14,21 @@ const { createClient } = require("@supabase/supabase-js");
 const BASE_URL     = "https://reception-eureka.com";
 const CALLBACK_URI = `${BASE_URL}/api/auth/callback`;
 
+/** Supabase の設定（管理画面のWebhook設定）から取得し、無ければ env var にフォールバック */
+async function getWebhookUrl() {
+  try {
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    const { data } = await sb
+      .from("reception_settings")
+      .select("value")
+      .eq("key", "google_chat_webhook")
+      .maybeSingle();
+    const url = data?.value?.replace(/^"|"$/g, ""); // jsonb の文字列値をアンクォート
+    if (url && url.startsWith("https://")) return url;
+  } catch (e) { console.error("getWebhookUrl:", e); }
+  return process.env.GOOGLE_CHAT_WEBHOOK_URL || null;
+}
+
 function parseCookies(req) {
   const cookies = {};
   (req.headers.cookie || "").split(";").forEach(c => {
@@ -98,7 +113,7 @@ module.exports = async (req, res) => {
       } catch (e) {
         console.error("audit log insert exception:", e);
       }
-      const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
+      const webhookUrl = await getWebhookUrl();
       if (isFirst && webhookUrl) {
         const message = subtitle
           ? `⚠️ *取り込み中のため、どなたか対応をお願いします。*\n来訪者: ${subtitle}\n（by ${responderName}）`
